@@ -3,6 +3,7 @@ package openapi
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -121,12 +122,7 @@ func (t *Type) UnmarshalYAML(value *yaml.Node) error {
 
 // Has reports whether the type list contains name.
 func (t Type) Has(name string) bool {
-	for _, item := range t {
-		if item == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t, name)
 }
 
 // First returns the first type name, if any.

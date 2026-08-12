@@ -18,7 +18,7 @@ tasks:
       - internal/**/*.gotmpl
       - go.sum
 
-  lint:go:
+  lint:
     run: once
     deps:
       - mod:download
@@ -29,11 +29,6 @@ tasks:
       - ./**/*.go
       - .golangci.yaml
       - go.sum
-
-  lint:
-    run: once
-    deps:
-      - lint:go
 
   check:
     run: once

@@ -1,4 +1,4 @@
-/.cache/
-/.task/
-/node_modules/
-/testdata/fixtures/*.openapi.yaml
+.cache/
+.task/
+node_modules/
+testdata/fixtures/*.openapi.yaml

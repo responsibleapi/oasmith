@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -168,7 +169,7 @@ func modelsTemplateData(doc *openapi.Document) modelsData {
 				model.Properties = append(model.Properties, modelPropertyData{
 					Name:     propName,
 					Optional: optional(required[propName]),
-					Type:     tsType(doc, schema.Properties[propName]),
+					Type:     tsType(schema.Properties[propName]),
 				})
 			}
 		case len(schema.Enum) > 0:
@@ -177,7 +178,7 @@ func modelsTemplateData(doc *openapi.Document) modelsData {
 				model.EnumValues = append(model.EnumValues, quote(value))
 			}
 		default:
-			model.Type = tsType(doc, schema)
+			model.Type = tsType(schema)
 		}
 		data.Schemas = append(data.Schemas, model)
 	}
@@ -366,7 +367,7 @@ func operationParams(operation *openapi.Operation) []opParam {
 		params = append(params, opParam{
 			Name:     openapi.LowerCamel(param.Name),
 			WireName: param.Name,
-			Type:     tsType(nil, param.Schema),
+			Type:     tsType(param.Schema),
 			Required: param.Required,
 			Optional: optional(param.Required),
 			Kind:     param.In,
@@ -381,7 +382,7 @@ func operationParams(operation *openapi.Operation) []opParam {
 		params = append(params, opParam{
 			Name:     name,
 			WireName: "body",
-			Type:     tsType(nil, schema),
+			Type:     tsType(schema),
 			Required: true,
 			Kind:     "body",
 		})
@@ -394,9 +395,7 @@ func operationResponses(doc *openapi.Document, method string, operation *openapi
 	for status := range operation.Responses {
 		statuses = append(statuses, status)
 	}
-	sort.Slice(statuses, func(i, j int) bool {
-		return statuses[i] < statuses[j]
-	})
+	slices.Sort(statuses)
 	responses := make([]opResponse, 0, len(statuses))
 	for _, status := range statuses {
 		statusCode, ok := parseStatus(status)
@@ -407,7 +406,7 @@ func operationResponses(doc *openapi.Document, method string, operation *openapi
 		kind := responseBodyKind(response)
 		responses = append(responses, opResponse{
 			Status: statusCode,
-			Type:   responseBodyType(doc, response),
+			Type:   responseBodyType(response),
 			Body:   responseHasTypedBody(response),
 			SSE:    method == "GET" && responseHasSSEBody(response),
 			JSON:   kind == "json",
@@ -457,15 +456,15 @@ func operationResultType(responses []opResponse) string {
 	return strings.Join(variants, " | ")
 }
 
-func responseBodyType(doc *openapi.Document, response openapi.Response) string {
+func responseBodyType(response openapi.Response) string {
 	if mt, ok := response.Content["text/event-stream"]; ok && mt.ItemSchema != nil {
-		return tsType(doc, mt.ItemSchema)
+		return tsType(mt.ItemSchema)
 	}
 	if mt, ok := response.Content["application/json"]; ok && mt.Schema != nil {
-		return tsType(doc, mt.Schema)
+		return tsType(mt.Schema)
 	}
 	if mt, ok := response.Content["application/rss+xml"]; ok && mt.Schema != nil {
-		return tsType(doc, mt.Schema)
+		return tsType(mt.Schema)
 	}
 	return "unknown"
 }
@@ -529,7 +528,7 @@ func uniqueStrings(values []string) []string {
 	return unique
 }
 
-func tsType(doc *openapi.Document, schema *openapi.Schema) string {
+func tsType(schema *openapi.Schema) string {
 	if schema == nil {
 		return "unknown"
 	}
@@ -551,7 +550,7 @@ func tsType(doc *openapi.Document, schema *openapi.Schema) string {
 		return strings.Join(values, " | ")
 	}
 	if schema.IsArray() {
-		return tsReadonlyArrayType(tsType(doc, schema.Items))
+		return tsReadonlyArrayType(tsType(schema.Items))
 	}
 	if schema.IsDuration() {
 		return "DurationString"
