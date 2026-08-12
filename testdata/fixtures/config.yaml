@@ -1,0 +1,251 @@
+openapi: 3.1.0
+info: 
+  title: Listenbox Config Schema
+  version: "1"
+paths: 
+  {}
+components: 
+  schemas: 
+    NonEmptyString: 
+      type: string
+      minLength: 1
+    TcpListenerConfig: 
+      type: object
+      properties: 
+        kind: 
+          type: string
+          const: tcp
+        addr: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - kind
+        - addr
+    UnixListenerConfig: 
+      type: object
+      properties: 
+        kind: 
+          type: string
+          const: unix
+        path: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - kind
+        - path
+    SystemdListenerConfig: 
+      type: object
+      properties: 
+        kind: 
+          type: string
+          const: systemd
+        fd_name: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - kind
+        - fd_name
+    ListenerConfig: 
+      discriminator: 
+        propertyName: kind
+        mapping: 
+          tcp: "#/components/schemas/TcpListenerConfig"
+          unix: "#/components/schemas/UnixListenerConfig"
+          systemd: "#/components/schemas/SystemdListenerConfig"
+      oneOf: 
+        - $ref: "#/components/schemas/TcpListenerConfig"
+        - $ref: "#/components/schemas/UnixListenerConfig"
+        - $ref: "#/components/schemas/SystemdListenerConfig"
+    APIConfig: 
+      type: object
+      properties: 
+        public_listener: 
+          $ref: "#/components/schemas/ListenerConfig"
+        private_listener: 
+          $ref: "#/components/schemas/ListenerConfig"
+        sites_listener: 
+          $ref: "#/components/schemas/ListenerConfig"
+        crypto_secret: 
+          $ref: "#/components/schemas/NonEmptyString"
+        inertia_origin: 
+          type: string
+          format: uri
+        public_media_base_url: 
+          type: string
+          format: uri
+        public_artwork_base_url: 
+          type: string
+          format: uri
+      required: 
+        - public_listener
+        - private_listener
+        - sites_listener
+        - crypto_secret
+        - inertia_origin
+        - public_media_base_url
+        - public_artwork_base_url
+    SSLMode: 
+      type: string
+      enum: 
+        - disable
+        - allow
+        - prefer
+        - require
+        - verify-ca
+        - verify-full
+    DBConfig: 
+      type: object
+      properties: 
+        host: 
+          $ref: "#/components/schemas/NonEmptyString"
+        port: 
+          minimum: 1
+          maximum: 65535
+          type: integer
+          format: int32
+        name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        user: 
+          $ref: "#/components/schemas/NonEmptyString"
+        password: 
+          $ref: "#/components/schemas/NonEmptyString"
+        sslmode: 
+          $ref: "#/components/schemas/SSLMode"
+        max_conns: 
+          minimum: 1
+          type: integer
+          format: int32
+        assert_migration_schema: 
+          type: boolean
+      required: 
+        - host
+        - port
+        - name
+        - user
+        - password
+        - sslmode
+        - max_conns
+    StdoutMailerConfig: 
+      type: object
+      properties: 
+        mode: 
+          type: string
+          const: stdout
+        from_name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        from_email: 
+          type: string
+          format: email
+      required: 
+        - mode
+        - from_name
+        - from_email
+    TestMailerConfig: 
+      type: object
+      properties: 
+        mode: 
+          type: string
+          const: test
+        from_name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        from_email: 
+          type: string
+          format: email
+      required: 
+        - mode
+        - from_name
+        - from_email
+    SesMailerConfig: 
+      type: object
+      properties: 
+        mode: 
+          type: string
+          const: ses
+        from_name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        from_email: 
+          type: string
+          format: email
+        region: 
+          $ref: "#/components/schemas/NonEmptyString"
+        access_key_id: 
+          $ref: "#/components/schemas/NonEmptyString"
+        secret_access_key: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - mode
+        - from_name
+        - from_email
+        - region
+        - access_key_id
+        - secret_access_key
+    MailerConfig: 
+      discriminator: 
+        propertyName: mode
+        mapping: 
+          stdout: "#/components/schemas/StdoutMailerConfig"
+          test: "#/components/schemas/TestMailerConfig"
+          ses: "#/components/schemas/SesMailerConfig"
+      oneOf: 
+        - $ref: "#/components/schemas/StdoutMailerConfig"
+        - $ref: "#/components/schemas/TestMailerConfig"
+        - $ref: "#/components/schemas/SesMailerConfig"
+    R2Config: 
+      type: object
+      properties: 
+        endpoint_url: 
+          type: string
+          format: uri
+        account_id: 
+          $ref: "#/components/schemas/NonEmptyString"
+        access_key_id: 
+          $ref: "#/components/schemas/NonEmptyString"
+        secret_access_key: 
+          $ref: "#/components/schemas/NonEmptyString"
+        uploads_bucket: 
+          $ref: "#/components/schemas/NonEmptyString"
+        media_bucket: 
+          $ref: "#/components/schemas/NonEmptyString"
+        images_bucket: 
+          $ref: "#/components/schemas/NonEmptyString"
+        generated_sites_bucket: 
+          $ref: "#/components/schemas/NonEmptyString"
+        presigned_upload_ttl:
+          type: string
+          format: duration
+      required: 
+        - account_id
+        - access_key_id
+        - secret_access_key
+        - uploads_bucket
+        - media_bucket
+        - images_bucket
+        - generated_sites_bucket
+        - presigned_upload_ttl
+    TelemetryConfig: 
+      type: object
+      properties: 
+        otlp_endpoint: 
+          $ref: "#/components/schemas/NonEmptyString"
+        otlp_headers: 
+          $ref: "#/components/schemas/NonEmptyString"
+        otlp_traces_endpoint: 
+          $ref: "#/components/schemas/NonEmptyString"
+        otlp_traces_headers: 
+          $ref: "#/components/schemas/NonEmptyString"
+    Config: 
+      type: object
+      properties: 
+        api: 
+          $ref: "#/components/schemas/APIConfig"
+        db: 
+          $ref: "#/components/schemas/DBConfig"
+        mailer: 
+          $ref: "#/components/schemas/MailerConfig"
+        r2: 
+          $ref: "#/components/schemas/R2Config"
+        telemetry: 
+          $ref: "#/components/schemas/TelemetryConfig"
+      required: 
+        - api
+        - db
+        - mailer
+        - r2
+        - telemetry

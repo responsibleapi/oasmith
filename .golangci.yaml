@@ -1,0 +1,75 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  relative-path-mode: gomod
+
+linters:
+  default: all
+  disable:
+    - arangolint
+    - clickhouselint
+    - copyloopvar
+    - cyclop
+    - depguard
+    - err113
+    - exhaustruct
+    - exhaustive
+    - forbidigo
+    - funlen
+    - ginkgolinter
+    - gochecknoglobals
+    - goconst
+    - goheader
+    - gomodguard
+    - gomodguard_v2
+    - goprintffuncname
+    - gosec
+    - lll
+    - loggercheck
+    - mnd
+    - modernize
+    - nestif
+    - nilnil
+    - nlreturn
+    - noinlineerr
+    - noctx
+    - perfsprint
+    - prealloc
+    - protogetter
+    - recvcheck
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - tagliatelle
+    - testifylint
+    - testpackage
+    - unparam
+    - unqueryvet
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - wsl_v5
+    - zerologlint
+  settings:
+    cyclop:
+      max-complexity: 12
+      package-average: 8
+    gomoddirectives:
+      replace-allow-list:
+        - github.com/getkin/kin-openapi
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: strict
+    warn-unused: true

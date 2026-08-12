@@ -1,0 +1,4 @@
+/.cache/
+/.task/
+/node_modules/
+/testdata/fixtures/*.openapi.yaml

@@ -1,0 +1,42 @@
+version: 3
+
+tasks:
+  mod:download:
+    run: once
+    cmd: go mod download
+    sources:
+      - go.mod
+      - go.sum
+
+  test:
+    run: once
+    deps:
+      - mod:download
+    cmd: go test ./...
+    sources:
+      - ./**/*.go
+      - internal/**/*.gotmpl
+      - go.sum
+
+  lint:go:
+    run: once
+    deps:
+      - mod:download
+    cmds:
+      - gofmt -w .
+      - go tool golangci-lint run ./...
+    sources:
+      - ./**/*.go
+      - .golangci.yaml
+      - go.sum
+
+  lint:
+    run: once
+    deps:
+      - lint:go
+
+  check:
+    run: once
+    deps:
+      - lint
+      - test

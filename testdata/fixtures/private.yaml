@@ -1,0 +1,1533 @@
+openapi: 3.2.0
+info: 
+  title: Listenbox Private API
+  version: "1"
+paths: 
+  /session: 
+    get: 
+      operationId: whoami
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/User"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+  /session/app-shell: 
+    get: 
+      deprecated: true
+      operationId: appShell
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/AppShellData"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+  /session/default-team: 
+    get: 
+      operationId: defaultTeam
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Team"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: User has no team.
+  "/session/pages/shows/{team_id}": 
+    get: 
+      operationId: showsPage
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/ShowsPage"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: Team not found for user.
+  "/session/pages/show/{show_id}": 
+    get: 
+      operationId: showPage
+      parameters: 
+        - name: show_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/ShowID"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/ShowPage"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: Show not found for user.
+  /session/teams: 
+    post: 
+      operationId: createTeam
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CreateTeam"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Team"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+  "/session/teams/{team_id}/image-uploads/presign": 
+    post: 
+      operationId: createImageUploadPresign
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CreateImageUploadPresign"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/CreatedImageUploadPresign"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: Team not found for user.
+  "/session/teams/{team_id}/media-uploads/presign": 
+    post: 
+      operationId: createMediaUploadPresign
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CreateMediaUploadPresign"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/CreatedMediaUploadPresign"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: Team not found for user.
+  "/session/teams/{team_id}/media-uploads/multipart": 
+    post: 
+      operationId: createMediaMultipartUpload
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CreateMediaMultipartUpload"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/CreatedMediaMultipartUpload"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: Team not found for user.
+  "/session/teams/{team_id}/media-uploads/{upload_session_id}/parts/presign": 
+    post: 
+      operationId: presignMediaUploadParts
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+        - name: upload_session_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/UploadSessionID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/PresignMediaUploadParts"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/PresignedMediaUploadParts"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: Upload session not found.
+  "/session/teams/{team_id}/media-uploads/{upload_session_id}/complete": 
+    post: 
+      operationId: completeMediaMultipartUpload
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+        - name: upload_session_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/UploadSessionID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CompleteMediaMultipartUpload"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/CompletedMediaMultipartUpload"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "404": 
+          description: Upload session not found.
+  /session/api-keys: 
+    get: 
+      operationId: listAPIKeys
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: "#/components/schemas/ListedAPIKey"
+                minItems: 0
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+    post: 
+      operationId: createAPIKey
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CreateAPIKey"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/CreatedAPIKey"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+  "/session/teams/{team_id}/shows": 
+    get: 
+      operationId: listShows
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: "#/components/schemas/Show"
+                minItems: 0
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+    post: 
+      operationId: createShow
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CreateShow"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Show"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "403": 
+          description: Missing show:create permission.
+        "409": 
+          description: Show slug already exists.
+  "/session/teams/{team_id}/shows/{show_id}": 
+    put: 
+      operationId: updateShow
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+        - name: show_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/ShowID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/UpdateShow"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Show"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+  "/session/teams/{team_id}/shows/{show_id}/episodes": 
+    get: 
+      operationId: listEpisodes
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+        - name: show_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/ShowID"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: "#/components/schemas/Episode"
+                minItems: 0
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+    post: 
+      operationId: createEpisode
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+        - name: show_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/ShowID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/CreateEpisode"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Episode"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+  "/session/teams/{team_id}/shows/{show_id}/episodes/{episode_id}": 
+    put: 
+      operationId: updateEpisode
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+        - name: show_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/ShowID"
+        - name: episode_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/EpisodeID"
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/UpdateEpisode"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Episode"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+  "/session/teams/{team_id}/shows/{show_id}/episodes/{episode_id}/episode-events": 
+    get: 
+      operationId: episodeProcessingEvents
+      parameters: 
+        - name: team_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/TeamID"
+        - name: show_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/ShowID"
+        - name: episode_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/EpisodeID"
+      security: 
+        - SessionAuth: 
+            []
+      responses: 
+        "200": 
+          description: Server-sent episode processing terminal events. Each SSE data line is an EpisodeProcessingCompleteEvent JSON object.
+          content: 
+            text/event-stream: 
+              itemSchema: 
+                $ref: "#/components/schemas/EpisodeProcessingCompleteEvent"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          $ref: "#/components/responses/RespInvalidSess"
+        "403": 
+          description: Missing episode access.
+        "404": 
+          description: Episode not found.
+  "/{feed_id}.rss": 
+    get: 
+      operationId: renderShowRSSFeed
+      parameters: 
+        - name: feed_id
+          in: path
+          required: true
+          schema: 
+            $ref: "#/components/schemas/FeedID"
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/rss+xml: 
+              schema: 
+                type: string
+                description: Podcast RSS XML.
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+  /auth/google/signup: 
+    post: 
+      operationId: createGoogleSignupSession
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/GoogleSignup"
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Session"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+  /auth/signup: 
+    post: 
+      operationId: createPasswordSignupSession
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/PasswordAuth"
+      responses: 
+        "202": 
+          description: Verification email accepted.
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "409": 
+          description: Email already exists.
+  /auth/login: 
+    post: 
+      operationId: createPasswordLoginSession
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/PasswordAuth"
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Session"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          description: Invalid email or password.
+        "403": 
+          description: Email is not verified.
+  /auth/password/reset/request: 
+    post: 
+      operationId: requestPasswordReset
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses: 
+        "202": 
+          description: Password reset email accepted.
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+  /auth/password/reset/confirm: 
+    post: 
+      operationId: confirmPasswordReset
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/PasswordResetConfirmation"
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Session"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          description: Invalid or expired reset token.
+  /auth/email/verify: 
+    post: 
+      operationId: verifyEmail
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: "#/components/schemas/EmailVerification"
+      responses: 
+        "201": 
+          description: "201"
+          content: 
+            application/json: 
+              schema: 
+                $ref: "#/components/schemas/Session"
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "401": 
+          description: Invalid or expired verification token.
+  /test/emails: 
+    get: 
+      operationId: listTestEmails
+      responses: 
+        "200": 
+          description: "200"
+          content: 
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: "#/components/schemas/TestEmail"
+                minItems: 0
+        "400": 
+          $ref: "#/components/responses/RespValidationErr"
+        "404": 
+          description: Test mailer is not enabled.
+components: 
+  securitySchemes: 
+    SessionAuth: 
+      type: http
+      description: Listenbox session token.
+      scheme: bearer
+  responses: 
+    RespValidationErr: 
+      description: "400"
+      content: 
+        application/octet-stream: 
+          schema: 
+            $ref: "#/components/schemas/ValidationErr"
+    RespInvalidSess: 
+      description: Invalid or expired session.
+  schemas: 
+    UserID: 
+      type: string
+      pattern: ^usr_
+    NonEmptyString: 
+      type: string
+      minLength: 1
+    User: 
+      type: object
+      properties: 
+        id: 
+          $ref: "#/components/schemas/UserID"
+        email: 
+          type: string
+          format: email
+        name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        picture_url: 
+          type: string
+          format: uri
+      required: 
+        - id
+        - email
+    ValidationLocation: 
+      type: string
+      enum: 
+        - body
+        - query
+        - path
+        - header
+        - cookie
+    string: 
+      type: string
+    ValidationIssueCode: 
+      type: string
+      description: "Stable machine-readable validation failure code. Uses invalid, parse, required, JSON Schema keyword names, additionalProperties for unknown object fields, and format.<format> for named format failures."
+      examples: 
+        - required
+        - minLength
+        - format.uri
+        - additionalProperties
+    ValidationIssue: 
+      type: object
+      properties: 
+        in: 
+          $ref: "#/components/schemas/ValidationLocation"
+        field: 
+          type: string
+        path: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/string"
+        code: 
+          $ref: "#/components/schemas/ValidationIssueCode"
+        message: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - in
+        - code
+        - message
+    ValidationErr: 
+      type: object
+      properties: 
+        message: 
+          $ref: "#/components/schemas/NonEmptyString"
+        errors: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/ValidationIssue"
+          minItems: 0
+      required: 
+        - message
+        - errors
+    TeamID: 
+      type: string
+      pattern: ^team_
+    TeamRole: 
+      type: string
+      enum: 
+        - owner
+        - write
+        - read
+    Team: 
+      type: object
+      properties: 
+        id: 
+          $ref: "#/components/schemas/TeamID"
+        name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        role: 
+          $ref: "#/components/schemas/TeamRole"
+      required: 
+        - id
+        - name
+        - role
+    AppShellData: 
+      type: object
+      properties: 
+        user: 
+          $ref: "#/components/schemas/User"
+        teams: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/Team"
+          minItems: 1
+      required: 
+        - user
+        - teams
+    ShowID: 
+      type: string
+      pattern: ^shw_
+    ShowSourceKind: 
+      type: string
+      enum: 
+        - audio
+        - video
+      description: Required primary source workflow for the show. Video means the show has a video feed and can publish video delivery assets.
+      examples: 
+        - audio
+        - video
+    Show: 
+      type: object
+      properties: 
+        id: 
+          $ref: "#/components/schemas/ShowID"
+        team_id: 
+          $ref: "#/components/schemas/TeamID"
+        title: 
+          $ref: "#/components/schemas/NonEmptyString"
+        slug: 
+          $ref: "#/components/schemas/NonEmptyString"
+        source_kind: 
+          $ref: "#/components/schemas/ShowSourceKind"
+        image_url: 
+          type: string
+          format: uri
+        description: 
+          type: string
+        website_url: 
+          type: string
+          format: uri
+      required: 
+        - id
+        - team_id
+        - title
+        - slug
+        - source_kind
+    ShowsPage: 
+      type: object
+      properties: 
+        shell: 
+          $ref: "#/components/schemas/AppShellData"
+        team_id: 
+          $ref: "#/components/schemas/TeamID"
+        shows: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/Show"
+          minItems: 0
+      required: 
+        - shell
+        - team_id
+        - shows
+    EpisodeID: 
+      type: string
+      pattern: ^ep_
+    EpisodeStatus: 
+      type: string
+      enum: 
+        - draft
+        - published
+    UnixMillis: 
+      description: UNIX epoch milliseconds.
+      minimum: 0
+      type: integer
+      format: int64
+    EpisodeProcessingStatus: 
+      type: string
+      enum: 
+        - queued
+        - processing
+        - completed
+        - failed
+    EpisodeProcessingSnapshot: 
+      type: object
+      properties: 
+        run_id: 
+          $ref: "#/components/schemas/NonEmptyString"
+        status: 
+          $ref: "#/components/schemas/EpisodeProcessingStatus"
+        current_step: 
+          $ref: "#/components/schemas/NonEmptyString"
+        percent: 
+          minimum: 0
+          maximum: 100
+          type: integer
+          format: uint32
+        error_code: 
+          $ref: "#/components/schemas/NonEmptyString"
+        error_message: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - run_id
+        - status
+        - current_step
+        - percent
+    FeedID: 
+      type: string
+      pattern: ^lb_
+    EpisodeEnclosureFormat: 
+      type: string
+      enum: 
+        - mp3
+        - m4a
+        - mp4
+    EpisodeEnclosure: 
+      type: object
+      properties: 
+        feed_id: 
+          $ref: "#/components/schemas/FeedID"
+        url: 
+          type: string
+          format: uri
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        byte_length: 
+          minimum: 1
+          type: integer
+          format: int64
+        format: 
+          $ref: "#/components/schemas/EpisodeEnclosureFormat"
+        duration_seconds: 
+          minimum: 1
+          type: integer
+          format: int64
+      required: 
+        - feed_id
+        - url
+        - content_type
+        - byte_length
+        - format
+        - duration_seconds
+    Episode: 
+      type: object
+      properties: 
+        id: 
+          $ref: "#/components/schemas/EpisodeID"
+        show_id: 
+          $ref: "#/components/schemas/ShowID"
+        title: 
+          $ref: "#/components/schemas/NonEmptyString"
+        slug: 
+          $ref: "#/components/schemas/NonEmptyString"
+        status: 
+          $ref: "#/components/schemas/EpisodeStatus"
+        description: 
+          type: string
+        republished_at: 
+          $ref: "#/components/schemas/UnixMillis"
+        thumbnail_url: 
+          type: string
+          format: uri
+        processing: 
+          $ref: "#/components/schemas/EpisodeProcessingSnapshot"
+        enclosures: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/EpisodeEnclosure"
+          minItems: 0
+      required: 
+        - id
+        - show_id
+        - title
+        - slug
+        - status
+        - enclosures
+    ShowPage: 
+      type: object
+      properties: 
+        shell: 
+          $ref: "#/components/schemas/AppShellData"
+        show: 
+          $ref: "#/components/schemas/Show"
+        episodes: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/Episode"
+          minItems: 0
+      required: 
+        - shell
+        - show
+        - episodes
+    CreateTeam: 
+      type: object
+      properties: 
+        name: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - name
+    CreateImageUploadPresign: 
+      type: object
+      properties: 
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        byte_length: 
+          minimum: 1
+          type: integer
+          format: int64
+        file_name: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - content_type
+        - byte_length
+    ImageUploadObjectKey: 
+      type: string
+      pattern: "^img_[a-f0-9]{16}\\.(jpg|jpeg|png)$"
+    CreatedImageUploadPresign: 
+      type: object
+      properties: 
+        method: 
+          type: string
+          const: PUT
+        upload_url: 
+          type: string
+          format: uri
+        object_key: 
+          $ref: "#/components/schemas/ImageUploadObjectKey"
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        expires_at: 
+          $ref: "#/components/schemas/UnixMillis"
+        public_url: 
+          type: string
+          format: uri
+      required: 
+        - method
+        - upload_url
+        - object_key
+        - content_type
+        - expires_at
+        - public_url
+    CreateMediaUploadPresign: 
+      type: object
+      properties: 
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        byte_length: 
+          minimum: 1
+          type: integer
+          format: int64
+        episode_id: 
+          $ref: "#/components/schemas/EpisodeID"
+        file_name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        show_id: 
+          $ref: "#/components/schemas/ShowID"
+      required: 
+        - content_type
+        - byte_length
+    MediaUploadObjectKey: 
+      type: string
+      pattern: "^upl_[a-f0-9]{16}/source$"
+    CreatedMediaUploadPresign: 
+      type: object
+      properties: 
+        method: 
+          type: string
+          const: PUT
+        upload_url: 
+          type: string
+          format: uri
+        object_key: 
+          $ref: "#/components/schemas/MediaUploadObjectKey"
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        expires_at: 
+          $ref: "#/components/schemas/UnixMillis"
+      required: 
+        - method
+        - upload_url
+        - object_key
+        - content_type
+        - expires_at
+    CreateMediaMultipartUpload: 
+      type: object
+      properties: 
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        byte_length: 
+          minimum: 1
+          type: integer
+          format: int64
+        episode_id: 
+          $ref: "#/components/schemas/EpisodeID"
+        file_name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        show_id: 
+          $ref: "#/components/schemas/ShowID"
+      required: 
+        - content_type
+        - byte_length
+    UploadSessionID: 
+      type: string
+      description: long multipart upload of audio or video
+      pattern: ^upl_
+    CreatedMediaMultipartUpload: 
+      type: object
+      properties: 
+        upload_session_id: 
+          $ref: "#/components/schemas/UploadSessionID"
+        object_key: 
+          $ref: "#/components/schemas/MediaUploadObjectKey"
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        byte_length: 
+          minimum: 1
+          type: integer
+          format: int64
+        part_size: 
+          minimum: 1
+          type: integer
+          format: int64
+        max_parallelism: 
+          minimum: 1
+          type: integer
+          format: uint32
+        expires_at: 
+          $ref: "#/components/schemas/UnixMillis"
+      required: 
+        - upload_session_id
+        - object_key
+        - content_type
+        - byte_length
+        - part_size
+        - max_parallelism
+        - expires_at
+    MediaUploadPartNumber: 
+      minimum: 1
+      maximum: 10000
+      type: integer
+      format: uint32
+    PresignMediaUploadParts: 
+      type: object
+      properties: 
+        part_numbers: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/MediaUploadPartNumber"
+          minItems: 1
+      required: 
+        - part_numbers
+    PresignedMediaUploadPart: 
+      type: object
+      properties: 
+        part_number: 
+          $ref: "#/components/schemas/MediaUploadPartNumber"
+        method: 
+          type: string
+          const: PUT
+        upload_url: 
+          type: string
+          format: uri
+        expires_at: 
+          $ref: "#/components/schemas/UnixMillis"
+      required: 
+        - part_number
+        - method
+        - upload_url
+        - expires_at
+    PresignedMediaUploadParts: 
+      type: object
+      properties: 
+        upload_session_id: 
+          $ref: "#/components/schemas/UploadSessionID"
+        parts: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/PresignedMediaUploadPart"
+          minItems: 1
+      required: 
+        - upload_session_id
+        - parts
+    CompletedMediaUploadPart: 
+      type: object
+      properties: 
+        part_number: 
+          $ref: "#/components/schemas/MediaUploadPartNumber"
+        etag: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - part_number
+        - etag
+    CompleteMediaMultipartUpload: 
+      type: object
+      properties: 
+        parts: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/CompletedMediaUploadPart"
+          minItems: 1
+      required: 
+        - parts
+    CompletedMediaMultipartUpload: 
+      type: object
+      properties: 
+        upload_session_id: 
+          $ref: "#/components/schemas/UploadSessionID"
+        object_key: 
+          $ref: "#/components/schemas/MediaUploadObjectKey"
+        content_type: 
+          $ref: "#/components/schemas/NonEmptyString"
+        byte_length: 
+          minimum: 1
+          type: integer
+          format: int64
+        completed_at: 
+          $ref: "#/components/schemas/UnixMillis"
+        processing: 
+          $ref: "#/components/schemas/EpisodeProcessingSnapshot"
+      required: 
+        - upload_session_id
+        - object_key
+        - content_type
+        - byte_length
+        - completed_at
+        - processing
+    ApiKeySecretHash: 
+      type: string
+      description: Hex-encoded 32-byte API key secret hash.
+      pattern: "^[a-f0-9]{64}$"
+    ApiKeyScope: 
+      type: string
+      enum: 
+        - show:create
+        - show:update
+        - episode:create
+        - episode:update
+        - episode:publish
+    ListedAPIKey: 
+      type: object
+      properties: 
+        secret_hash: 
+          $ref: "#/components/schemas/ApiKeySecretHash"
+        name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        secret_suffix: 
+          $ref: "#/components/schemas/NonEmptyString"
+        scopes: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/ApiKeyScope"
+          minItems: 1
+        created_at: 
+          $ref: "#/components/schemas/UnixMillis"
+      required: 
+        - secret_hash
+        - name
+        - secret_suffix
+        - scopes
+        - created_at
+    CreateAPIKey: 
+      type: object
+      properties: 
+        name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        scopes: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/ApiKeyScope"
+          minItems: 1
+      required: 
+        - name
+        - scopes
+    CreatedAPIKey: 
+      type: object
+      properties: 
+        secret_hash: 
+          $ref: "#/components/schemas/ApiKeySecretHash"
+        key: 
+          type: string
+          pattern: "^apk_[a-f0-9]{32}\\.[A-Za-z0-9_-]{22}$"
+        scopes: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/ApiKeyScope"
+          minItems: 1
+      required: 
+        - secret_hash
+        - key
+        - scopes
+    CreateShow: 
+      type: object
+      properties: 
+        title: 
+          $ref: "#/components/schemas/NonEmptyString"
+        slug: 
+          $ref: "#/components/schemas/NonEmptyString"
+        source_kind: 
+          $ref: "#/components/schemas/ShowSourceKind"
+        description: 
+          type: string
+        website_url: 
+          type: string
+          format: uri
+      required: 
+        - title
+        - slug
+        - source_kind
+    UpdateShow: 
+      type: object
+      properties: 
+        title: 
+          $ref: "#/components/schemas/NonEmptyString"
+        slug: 
+          $ref: "#/components/schemas/NonEmptyString"
+        description: 
+          type: string
+        website_url: 
+          type: string
+          format: uri
+    CreateEpisode: 
+      type: object
+      properties: 
+        title: 
+          $ref: "#/components/schemas/NonEmptyString"
+        slug: 
+          $ref: "#/components/schemas/NonEmptyString"
+        description: 
+          type: string
+        status: 
+          $ref: "#/components/schemas/EpisodeStatus"
+        republished_at: 
+          $ref: "#/components/schemas/UnixMillis"
+        thumbnail_url: 
+          type: string
+          format: uri
+        enclosures: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/EpisodeEnclosure"
+          minItems: 0
+    UpdateEpisode: 
+      type: object
+      properties: 
+        title: 
+          $ref: "#/components/schemas/NonEmptyString"
+        slug: 
+          $ref: "#/components/schemas/NonEmptyString"
+        description: 
+          type: string
+        status: 
+          $ref: "#/components/schemas/EpisodeStatus"
+        republished_at: 
+          $ref: "#/components/schemas/UnixMillis"
+        thumbnail_url: 
+          type: string
+          format: uri
+        enclosures: 
+          type: array
+          items: 
+            $ref: "#/components/schemas/EpisodeEnclosure"
+          minItems: 0
+    EpisodeProcessingCompleteEvent: 
+      type: object
+      properties: 
+        event: 
+          type: string
+          const: episode.processing.complete
+        data: 
+          type: string
+          contentMediaType: application/json
+          contentSchema: 
+            type: object
+            properties: 
+              type: 
+                type: string
+                const: episode.processing.complete
+              run_id: 
+                $ref: "#/components/schemas/NonEmptyString"
+              status: 
+                $ref: "#/components/schemas/EpisodeProcessingStatus"
+              current_step: 
+                $ref: "#/components/schemas/NonEmptyString"
+              percent: 
+                minimum: 0
+                maximum: 100
+                type: integer
+                format: uint32
+              error_code: 
+                $ref: "#/components/schemas/NonEmptyString"
+              error_message: 
+                $ref: "#/components/schemas/NonEmptyString"
+            required: 
+              - type
+              - run_id
+              - status
+              - current_step
+              - percent
+        id: 
+          type: string
+        retry: 
+          minimum: 0
+          type: integer
+      required: 
+        - event
+        - data
+    GoogleSignup: 
+      type: object
+      properties: 
+        google_sub: 
+          $ref: "#/components/schemas/NonEmptyString"
+        email: 
+          type: string
+          format: email
+        email_verified: 
+          type: boolean
+        name: 
+          $ref: "#/components/schemas/NonEmptyString"
+        picture_url: 
+          type: string
+          format: uri
+      required: 
+        - google_sub
+        - email
+        - email_verified
+    SessionID: 
+      type: string
+      pattern: ^sess_
+    Session: 
+      type: object
+      properties: 
+        id: 
+          $ref: "#/components/schemas/SessionID"
+        user_id: 
+          $ref: "#/components/schemas/UserID"
+        expires_at: 
+          $ref: "#/components/schemas/UnixMillis"
+      required: 
+        - id
+        - user_id
+        - expires_at
+    PasswordAuth: 
+      type: object
+      properties: 
+        email: 
+          type: string
+          format: email
+        password: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - email
+        - password
+    PasswordResetRequest: 
+      type: object
+      properties: 
+        email: 
+          type: string
+          format: email
+      required: 
+        - email
+    PasswordResetConfirmation: 
+      type: object
+      properties: 
+        token: 
+          $ref: "#/components/schemas/NonEmptyString"
+        password: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - token
+        - password
+    EmailVerification: 
+      type: object
+      properties: 
+        token: 
+          $ref: "#/components/schemas/NonEmptyString"
+      required: 
+        - token
+    TestEmail: 
+      type: object
+      properties: 
+        id: 
+          $ref: "#/components/schemas/NonEmptyString"
+        from: 
+          type: string
+          format: email
+        to: 
+          type: string
+          format: email
+        subject: 
+          type: string
+        html: 
+          type: string
+        plain: 
+          type: string
+      required: 
+        - id
+        - from
+        - to
+        - subject
+        - html
+        - plain

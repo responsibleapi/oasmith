@@ -1,0 +1,233 @@
+{{define "models.go"}}package {{.PackageName}}
+
+{{if .Imports}}import (
+{{range .Imports}}	{{printf "%q" .}}
+{{end}})
+
+{{end}}{{range .Schemas}}{{template "schema" .}}
+
+{{end}}{{if .NeedsDurationHelpers}}{{template "duration_helpers" .}}{{end}}{{end}}
+
+{{define "schema"}}{{if .Alias}}{{template "alias" .Alias}}{{else if .Enum}}{{template "enum" .Enum}}{{else if .Object}}{{template "object" .Object}}{{else if .OneOf}}{{template "one_of" .OneOf}}{{end}}{{end}}
+
+{{define "alias"}}{{if .HasConst}}type {{.TypeName}} {{.GoType}}
+
+const {{.ConstName}} {{.TypeName}} = {{printf "%q" .ConstValue}}
+{{else}}type {{.TypeName}} = {{.GoType}}
+{{end}}{{end}}
+
+{{define "enum"}}type {{.TypeName}} string
+
+const (
+{{range .Values}}	{{.ConstName}} {{$.TypeName}} = {{printf "%q" .Value}}
+{{end}})
+{{end}}
+
+{{define "object"}}type {{.TypeName}} struct {
+{{range .Fields}}	{{.Name}} {{.Type}} `json:"{{.JSONName}}{{.JSONOmit}}"`
+{{end}}}
+{{end}}
+
+{{define "one_of"}}// {{.TypeName}} is generated from an OpenAPI oneOf schema.
+{{range .Refs}}// oneOf variant: {{.TypeName}}
+{{end}}type {{.TypeName}} struct {
+{{range .Refs}}	{{.FieldName}} *{{.TypeName}}
+{{end}}}
+
+func (dst *{{.TypeName}}) UnmarshalJSON(data []byte) error {
+{{if .HasDiscriminator}}	var discriminator struct {
+		Value string `json:"{{.DiscriminatorProperty}}"`
+	}
+	if err := json.Unmarshal(data, &discriminator); err != nil {
+		return fmt.Errorf("decode {{.TypeName}} discriminator: %w", err)
+	}
+	switch discriminator.Value {
+{{range .Mappings}}	case {{printf "%q" .Value}}:
+		var decoded {{.FieldName}}
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			return fmt.Errorf("decode {{$.TypeName}} as {{.FieldName}}: %w", err)
+		}
+		*dst = {{$.TypeName}}{ {{.FieldName}}: &decoded }
+		return nil
+{{end}}	default:
+		return fmt.Errorf("unsupported {{.TypeName}} discriminator %q", discriminator.Value)
+	}
+{{else}}	return fmt.Errorf("{{.TypeName}} discriminator is missing")
+{{end}}}
+{{if .HasDiscriminator}}
+func (src {{.TypeName}}) MarshalJSON() ([]byte, error) {
+	matchCount := 0
+{{range .Refs}}	if src.{{.FieldName}} != nil {
+		matchCount++
+	}
+{{end}}	if matchCount != 1 {
+		return nil, fmt.Errorf("{{.TypeName}} must contain exactly one variant, got %d", matchCount)
+	}
+{{range .Refs}}	if src.{{.FieldName}} != nil {
+		return json.Marshal(src.{{.FieldName}})
+	}
+{{end}}	return nil, fmt.Errorf("{{.TypeName}} has no variant")
+}
+
+func (src {{.TypeName}}) GetActualInstance() any {
+{{range .Refs}}	if src.{{.FieldName}} != nil {
+		return src.{{.FieldName}}
+	}
+{{end}}	return nil
+}
+{{range .Refs}}
+func {{.FieldName}}As{{$.TypeName}}(v {{.FieldName}}) {{$.TypeName}} {
+	return {{$.TypeName}}{ {{.FieldName}}: &v }
+}
+{{end}}{{end}}{{end}}
+
+{{define "duration_helpers"}}
+type ISODuration time.Duration
+
+func (dst *ISODuration) UnmarshalJSON(data []byte) error {
+	var decoded string
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return fmt.Errorf("decode ISO duration: %w", err)
+	}
+	parsed, err := parseISODuration(decoded)
+	if err != nil {
+		return err
+	}
+	*dst = ISODuration(parsed)
+	return nil
+}
+
+func (src ISODuration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(formatISODuration(src))
+}
+
+const (
+	dayDuration  = 24 * time.Hour
+	weekDuration = 7 * dayDuration
+)
+
+func formatISODuration(value ISODuration) string {
+	return "PT" + strconv.FormatFloat(float64(value)/float64(time.Second), 'f', -1, 64) + "S"
+}
+
+func parseISODuration(value string) (time.Duration, error) {
+	if value == "" || value[0] != 'P' {
+		return 0, fmt.Errorf("duration %q must start with P", value)
+	}
+
+	var total time.Duration
+	inTime := false
+	seenPart := false
+	for index := 1; index < len(value); {
+		if value[index] == 'T' {
+			if inTime {
+				return 0, fmt.Errorf("duration %q has duplicate time marker", value)
+			}
+			inTime = true
+			index++
+			continue
+		}
+
+		nextIndex, amount, unit, err := scanDurationPart(value, index)
+		if err != nil {
+			return 0, err
+		}
+		durationPart, err := fixedISODurationPart(value, unit, amount, inTime)
+		if err != nil {
+			return 0, err
+		}
+		total += durationPart
+		seenPart = true
+		index = nextIndex
+	}
+	if !seenPart {
+		return 0, fmt.Errorf("duration %q must contain at least one duration part", value)
+	}
+	return total, nil
+}
+
+func scanDurationPart(value string, index int) (int, float64, byte, error) {
+	start := index
+	for index < len(value) && isDurationNumberByte(value[index]) {
+		index++
+	}
+	if start == index || index >= len(value) {
+		return 0, 0, 0, fmt.Errorf("duration %q has invalid duration part", value)
+	}
+	amount, err := strconv.ParseFloat(value[start:index], 64)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("duration %q has invalid numeric value %q: %w", value, value[start:index], err)
+	}
+	return index + 1, amount, value[index], nil
+}
+
+func isDurationNumberByte(value byte) bool {
+	return (value >= '0' && value <= '9') || value == '.'
+}
+
+func fixedISODurationPart(
+	value string,
+	unit byte,
+	amount float64,
+	inTime bool,
+) (time.Duration, error) {
+	switch unit {
+	case 'W':
+		return fixedISODateDurationPart(value, unit, amount, weekDuration, inTime)
+	case 'D':
+		return fixedISODateDurationPart(value, unit, amount, dayDuration, inTime)
+	case 'H':
+		return fixedISOTimeDurationPart(value, unit, amount, time.Hour, inTime)
+	case 'M':
+		if !inTime {
+			return 0, fmt.Errorf("duration %q has unsupported month unit", value)
+		}
+		return time.Duration(amount * float64(time.Minute)), nil
+	case 'S':
+		return fixedISOTimeDurationPart(value, unit, amount, time.Second, inTime)
+	default:
+		return 0, fmt.Errorf("duration %q has unsupported unit %q", value, string(unit))
+	}
+}
+
+func fixedISODateDurationPart(
+	value string,
+	unit byte,
+	amount float64,
+	scale time.Duration,
+	inTime bool,
+) (time.Duration, error) {
+	if inTime {
+		return 0, fmt.Errorf("duration %q has %s unit in time section", value, isoDurationUnitName(unit))
+	}
+	return time.Duration(amount * float64(scale)), nil
+}
+
+func fixedISOTimeDurationPart(
+	value string,
+	unit byte,
+	amount float64,
+	scale time.Duration,
+	inTime bool,
+) (time.Duration, error) {
+	if !inTime {
+		return 0, fmt.Errorf("duration %q has %s unit outside time section", value, isoDurationUnitName(unit))
+	}
+	return time.Duration(amount * float64(scale)), nil
+}
+
+func isoDurationUnitName(unit byte) string {
+	switch unit {
+	case 'W':
+		return "week"
+	case 'D':
+		return "day"
+	case 'H':
+		return "hour"
+	case 'S':
+		return "second"
+	default:
+		return string(unit)
+	}
+}
+{{end}}

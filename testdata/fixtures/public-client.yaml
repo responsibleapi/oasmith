@@ -1,0 +1,191 @@
+openapi: 3.2.0
+info:
+  title: Client behavior fixture
+  version: "1"
+paths:
+  /uploads/{owner}:
+    parameters:
+      - name: owner
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: "#/components/parameters/uploadType"
+    post:
+      operationId: uploadMedia
+      requestBody:
+        required: true
+        content:
+          application/octet-stream: {}
+      responses:
+        "201":
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+  /things/{thing_id}:
+    post:
+      operationId: createThing
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: thing_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: notify
+          in: query
+          required: true
+          schema:
+            type: boolean
+        - name: label
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateThing"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+        "400":
+          description: Invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /events:
+    get:
+      operationId: watchEvents
+      responses:
+        "200":
+          description: Events
+          content:
+            text/event-stream:
+              itemSchema:
+                $ref: "#/components/schemas/Event"
+components:
+  parameters:
+    uploadType:
+      name: uploadType
+      in: query
+      required: true
+      schema:
+        type: string
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    CreateThing:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+    Thing:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    Problem:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+    ProgressEvent:
+      type: object
+      required: [kind, percent]
+      properties:
+        kind:
+          type: string
+          const: progress
+        percent:
+          type: integer
+          format: uint32
+    CompletedResult:
+      type: object
+      required: [status, thing]
+      properties:
+        status:
+          type: string
+          const: completed
+        thing:
+          $ref: "#/components/schemas/Thing"
+    FailedResult:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+          const: failed
+        message:
+          type: string
+    TerminalResult:
+      oneOf:
+        - $ref: "#/components/schemas/CompletedResult"
+        - $ref: "#/components/schemas/FailedResult"
+      discriminator:
+        propertyName: status
+        mapping:
+          completed: "#/components/schemas/CompletedResult"
+          failed: "#/components/schemas/FailedResult"
+    TerminalEvent:
+      type: object
+      required: [kind, result]
+      properties:
+        kind:
+          type: string
+          const: terminal
+        result:
+          $ref: "#/components/schemas/TerminalResult"
+    Event:
+      oneOf:
+        - type: object
+          required: [event, data]
+          properties:
+            event:
+              type: string
+              const: progress
+            data:
+              type: string
+              contentMediaType: application/json
+              contentSchema:
+                $ref: "#/components/schemas/ProgressEvent"
+        - type: object
+          required: [event, data]
+          properties:
+            event:
+              type: string
+              const: terminal
+            data:
+              type: string
+              contentMediaType: application/json
+              contentSchema:
+                $ref: "#/components/schemas/TerminalEvent"

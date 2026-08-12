@@ -1,0 +1,714 @@
+{{define "api.ts"}}{{if .Imports}}import type {
+{{range .Imports}}    {{.}},
+{{end}}} from './types.ts';
+{{end}}
+export type FetchInterceptor = (chain: FetchInterceptorChain) => Promise<Response>;
+
+export type FetchInterceptorChain = {
+    request: Request;
+    proceed(request?: Request): Promise<Response>;
+};
+
+export type ClientOptions = {
+    baseURL?: string;
+    interceptors?: FetchInterceptor[];
+    responseTimeoutMs?: number;
+    sseIdleTimeoutMs?: number;
+    sseMaxRetries?: number;
+    sseReconnectBaseDelayMs?: number;
+    sseReconnectOnStreamEnd?: boolean;
+};
+
+const defaultResponseTimeoutMs = 30_000;
+{{if .HasSSE}}
+const defaultSSEIdleTimeoutMs = 60_000;
+const defaultSSEMaxRetries = 5;
+const defaultSSEReconnectBaseDelayMs = 200;
+const maxSSERetries = 100;
+{{end}}
+
+export class RequiredError extends Error {
+    constructor(public field: string, msg?: string) {
+        super(msg);
+        this.name = 'RequiredError';
+    }
+}
+
+export class ResponseError extends Error {
+    constructor(public response: Response, msg?: string) {
+        super(msg ?? 'Response returned ' + String(response.status));
+        this.name = 'ResponseError';
+    }
+}
+
+type ResponseTimeout = {
+    signal: AbortSignal;
+    stop(): void;
+};
+
+const activeResponseTimeoutControllers = new Set<AbortController>();
+const activeResponseTimeoutRequests = new Set<Request>();
+
+function configuredTimeout(
+    options: ClientOptions,
+    name: 'responseTimeoutMs' | 'sseIdleTimeoutMs',
+    defaultValue: number,
+): number | undefined {
+    const value = Object.prototype.hasOwnProperty.call(options, name)
+        ? options[name]
+        : defaultValue;
+    if (value === undefined || value === 0) {
+        return undefined;
+    }
+    if (!Number.isFinite(value) || value < 0) {
+        throw new RangeError(`${name} must be a finite non-negative number`);
+    }
+    return value;
+}
+
+{{if .HasSSE}}function configuredSSEMaxRetries(options: ClientOptions): number {
+    const value = Object.prototype.hasOwnProperty.call(options, 'sseMaxRetries')
+        ? options.sseMaxRetries
+        : defaultSSEMaxRetries;
+    if (value === undefined) {
+        return defaultSSEMaxRetries;
+    }
+    if (!Number.isInteger(value) || value < 0 || value > maxSSERetries) {
+        throw new RangeError(`sseMaxRetries must be an integer between 0 and ${maxSSERetries}`);
+    }
+    return value;
+}
+
+function configuredSSEReconnectBaseDelayMs(options: ClientOptions): number {
+    const value = Object.prototype.hasOwnProperty.call(options, 'sseReconnectBaseDelayMs')
+        ? options.sseReconnectBaseDelayMs
+        : defaultSSEReconnectBaseDelayMs;
+    if (value === undefined) {
+        return defaultSSEReconnectBaseDelayMs;
+    }
+    if (!Number.isFinite(value) || value < 0) {
+        throw new RangeError('sseReconnectBaseDelayMs must be a finite non-negative number');
+    }
+    return value;
+}
+{{end}}
+
+function responseTimeout(signal: AbortSignal, timeoutMs: number | undefined): ResponseTimeout {
+    if (timeoutMs === undefined) {
+        return { signal, stop() {} };
+    }
+    const controller = new AbortController();
+    activeResponseTimeoutControllers.add(controller);
+    function abortFromCaller(): void {
+        controller.abort(signal.reason);
+    }
+    if (signal.aborted) {
+        abortFromCaller();
+    } else {
+        signal.addEventListener('abort', abortFromCaller, { once: true });
+    }
+    const timer = setTimeout(() => {
+        const error = new Error(`Response timed out after ${timeoutMs}ms`);
+        error.name = 'TimeoutError';
+        controller.abort(error);
+    }, timeoutMs);
+    return {
+        signal: controller.signal,
+        stop(): void {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', abortFromCaller);
+            activeResponseTimeoutControllers.delete(controller);
+        },
+    };
+}
+
+{{if .HasSSE}}function readEventStreamChunk(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    idleTimeoutMs: number | undefined,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+    if (idleTimeoutMs === undefined) {
+        return reader.read();
+    }
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            const error = new Error(`SSE stream was idle for ${idleTimeoutMs}ms`);
+            error.name = 'TimeoutError';
+            void reader.cancel(error);
+            reject(error);
+        }, idleTimeoutMs);
+        void reader.read().then(
+            result => {
+                clearTimeout(timer);
+                resolve(result);
+            },
+            error => {
+                clearTimeout(timer);
+                reject(error);
+            },
+        );
+    });
+}
+
+type SSEAttempt = {
+    response: Response;
+    timeout: ResponseTimeout;
+};
+
+function retryableSSEStatus(status: number): boolean {
+    return status === 502 || status === 503 || status === 504;
+}
+
+function sseError(message: string): Error {
+    const error = new Error(message);
+    error.name = 'SSEReconnectError';
+    return error;
+}
+
+function sseRetryDelay(
+    baseDelayMs: number,
+    failureCount: number,
+    serverDelayMs: number | undefined,
+): number {
+    if (serverDelayMs !== undefined) {
+        return serverDelayMs;
+    }
+    const exponential = baseDelayMs * 2 ** Math.max(0, failureCount - 1);
+    return exponential * (0.9 + Math.random() * 0.2);
+}
+
+function waitForSSERetry(
+    signal: AbortSignal,
+    delayMs: number,
+    isClosed?: () => boolean,
+): Promise<void> {
+    if (signal.aborted || isClosed?.()) {
+        return Promise.reject(signal.reason ?? sseError('SSE reconnect canceled'));
+    }
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            signal.removeEventListener('abort', abort);
+            if (isClosed?.()) {
+                reject(sseError('SSE reconnect canceled'));
+            } else {
+                resolve();
+            }
+        }, Math.max(0, delayMs));
+        function abort(): void {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', abort);
+            reject(signal.reason ?? sseError('SSE reconnect canceled'));
+        }
+        signal.addEventListener('abort', abort, { once: true });
+    });
+}
+
+async function openReconnectingSSE(
+    open: () => Promise<SSEAttempt>,
+    signal: AbortSignal,
+    maxRetries: number,
+    baseDelayMs: number,
+): Promise<SSEAttempt> {
+    let failures = 0;
+    let serverDelayMs: number | undefined;
+    while (true) {
+        if (signal.aborted) {
+            throw signal.reason ?? sseError('SSE connection canceled');
+        }
+        let attempt: SSEAttempt;
+        try {
+            attempt = await open();
+        } catch (error) {
+            if (signal.aborted) {
+                throw signal.reason ?? error;
+            }
+            if (failures >= maxRetries) {
+                throw error;
+            }
+            failures += 1;
+            await waitForSSERetry(signal, sseRetryDelay(baseDelayMs, failures, serverDelayMs));
+            serverDelayMs = undefined;
+            continue;
+        }
+        if (!retryableSSEStatus(attempt.response.status)) {
+            return attempt;
+        }
+        if (failures >= maxRetries) {
+            return attempt;
+        }
+        await attempt.response.body?.cancel();
+        attempt.timeout.stop();
+        failures += 1;
+        await waitForSSERetry(signal, sseRetryDelay(baseDelayMs, failures, serverDelayMs));
+        serverDelayMs = undefined;
+    }
+}
+
+function appendSSEBytes(
+    existing: Uint8Array<ArrayBufferLike>,
+    next: Uint8Array<ArrayBufferLike>,
+): Uint8Array<ArrayBufferLike> {
+    const combined = new Uint8Array(existing.byteLength + next.byteLength);
+    combined.set(existing);
+    combined.set(next, existing.byteLength);
+    return combined;
+}
+
+function sseFrameEnd(bytes: Uint8Array): number {
+    for (let index = 1; index < bytes.byteLength; index += 1) {
+        if (
+            bytes[index] === 10 &&
+            (bytes[index - 1] === 10 ||
+                (bytes[index - 1] === 13 && index >= 2 && bytes[index - 2] === 10))
+        ) {
+            return index + 1;
+        }
+    }
+    return -1;
+}
+
+function sseRetryValue(frame: Uint8Array): number | undefined {
+    const text = new TextDecoder().decode(frame);
+    for (const line of text.split(/\r?\n/)) {
+        if (!line.startsWith('retry:')) {
+            continue;
+        }
+        const value = Number(line.slice(6).trim());
+        if (Number.isInteger(value) && value >= 0 && Number.isFinite(value)) {
+            return value;
+        }
+    }
+    return undefined;
+}
+
+function reconnectingSSEBody(
+    first: SSEAttempt,
+    open: () => Promise<SSEAttempt>,
+    signal: AbortSignal,
+    maxRetries: number,
+    baseDelayMs: number,
+    idleTimeoutMs: number | undefined,
+    reconnectOnStreamEnd: boolean,
+    dispose: () => void,
+): ReadableStream<Uint8Array> {
+    let current = first;
+    let reader = current.response.body?.getReader();
+    let pending: Uint8Array<ArrayBufferLike> = new Uint8Array();
+    let readyFrames: Uint8Array<ArrayBufferLike>[] = [];
+    let failures = 0;
+    let serverDelayMs: number | undefined;
+    let closed = false;
+
+    async function closeCurrent(): Promise<void> {
+        current.timeout.stop();
+        try {
+            await reader?.cancel();
+        } catch {
+            // The transport is already closing.
+        }
+        reader = undefined;
+    }
+
+    async function reconnect(lastError: unknown): Promise<void> {
+        while (true) {
+            if (closed || signal.aborted) {
+                throw signal.reason ?? lastError;
+            }
+            if (failures >= maxRetries) {
+                throw lastError;
+            }
+            failures += 1;
+            await closeCurrent();
+            await waitForSSERetry(
+                signal,
+                sseRetryDelay(baseDelayMs, failures, serverDelayMs),
+                () => closed,
+            );
+            serverDelayMs = undefined;
+            try {
+                const next = await open();
+                if (retryableSSEStatus(next.response.status)) {
+                    lastError = sseError(`SSE reconnect returned HTTP ${next.response.status}`);
+                    await next.response.body?.cancel();
+                    next.timeout.stop();
+                    if (failures >= maxRetries) {
+                        throw lastError;
+                    }
+                    failures += 1;
+                    await waitForSSERetry(
+                        signal,
+                        sseRetryDelay(baseDelayMs, failures, serverDelayMs),
+                        () => closed,
+                    );
+                    serverDelayMs = undefined;
+                    continue;
+                }
+                if (next.response.status < 200 || next.response.status >= 300) {
+                    await next.response.body?.cancel();
+                    next.timeout.stop();
+                    throw new ResponseError(next.response, `SSE reconnect returned HTTP ${next.response.status}`);
+                }
+                current = next;
+                current.timeout.stop();
+                reader = current.response.body?.getReader();
+                pending = new Uint8Array();
+                return;
+            } catch (error) {
+                if (error instanceof ResponseError) {
+                    throw error;
+                }
+                if (closed || signal.aborted) {
+                    throw signal.reason ?? error;
+                }
+                lastError = error;
+            }
+        }
+    }
+
+    return new ReadableStream<Uint8Array>({
+        async pull(controller): Promise<void> {
+            if (closed) {
+                return;
+            }
+            if (readyFrames.length > 0) {
+                controller.enqueue(readyFrames.shift()!);
+                return;
+            }
+            while (!closed) {
+                try {
+                    if (!reader) {
+                        throw sseError('SSE response has no readable body');
+                    }
+                    const result = await readEventStreamChunk(reader, idleTimeoutMs);
+                    if (result.done) {
+                        if (!reconnectOnStreamEnd) {
+                            closed = true;
+                            dispose();
+                            controller.close();
+                            return;
+                        }
+                        throw sseError('SSE stream ended before a complete event');
+                    }
+                    pending = appendSSEBytes(pending, result.value);
+                    let end = sseFrameEnd(pending);
+                    while (end !== -1) {
+                        const frame = pending.slice(0, end);
+                        pending = pending.slice(end);
+                        const retry = sseRetryValue(frame);
+                        if (retry !== undefined) {
+                            serverDelayMs = retry;
+                        }
+                        failures = 0;
+                        readyFrames.push(frame);
+                        end = sseFrameEnd(pending);
+                    }
+                    if (readyFrames.length > 0) {
+                        controller.enqueue(readyFrames.shift()!);
+                        return;
+                    }
+                } catch (error) {
+                    if (closed || signal.aborted) {
+                        controller.error(signal.reason ?? error);
+                        return;
+                    }
+                    pending = new Uint8Array();
+                    try {
+                        await reconnect(error);
+                    } catch (reconnectError) {
+                        closed = true;
+                        dispose();
+                        controller.error(reconnectError);
+                        return;
+                    }
+                }
+            }
+        },
+        async cancel(): Promise<void> {
+            closed = true;
+            readyFrames = [];
+            pending = new Uint8Array();
+            await closeCurrent();
+            dispose();
+        },
+    });
+}
+
+async function* parseEventStream<T>(
+    response: Response,
+    idleTimeoutMs: number | undefined,
+): AsyncGenerator<T, void, void> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+        return;
+    }
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let data: string[] = [];
+    try {
+        while (true) {
+            const result = await readEventStreamChunk(reader, idleTimeoutMs);
+            if (result.done) {
+                break;
+            }
+            buffer += decoder.decode(result.value, { stream: true });
+            let newlineIndex = buffer.indexOf('\n');
+            while (newlineIndex !== -1) {
+                const rawLine = buffer.slice(0, newlineIndex);
+                buffer = buffer.slice(newlineIndex + 1);
+                const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+                if (line === '') {
+                    if (data.length > 0) {
+                        const parsed: T = JSON.parse(data.join('\n'));
+                        yield parsed;
+                        data = [];
+                    }
+                } else if (line.startsWith('data:')) {
+                    data.push(line.slice(5).trimStart());
+                }
+                newlineIndex = buffer.indexOf('\n');
+            }
+        }
+        buffer += decoder.decode();
+        if (buffer.startsWith('data:')) {
+            data.push(buffer.slice(5).trimStart());
+        }
+        if (data.length > 0) {
+            const parsed: T = JSON.parse(data.join('\n'));
+            yield parsed;
+        }
+    } finally {
+        try {
+            await reader.cancel();
+        } catch {
+            // The request signal may already have canceled the body.
+        }
+        reader.releaseLock();
+    }
+}
+
+{{end}}
+async function runInterceptors(
+    request: Request,
+    interceptors: FetchInterceptor[],
+): Promise<Response> {
+    async function dispatch(index: number, nextRequest: Request): Promise<Response> {
+        const interceptor = interceptors[index];
+        if (!interceptor) {
+            return await fetch(nextRequest);
+        }
+        return await interceptor({
+            request: nextRequest,
+            proceed(requestOverride?: Request): Promise<Response> {
+                return dispatch(index + 1, requestOverride ?? nextRequest);
+            },
+        });
+    }
+    return await dispatch(0, request);
+}
+
+{{range .RequestInterfaces}}export interface {{.Name}} {
+{{range .Params}}    {{.Name}}{{.Optional}}: {{.Type}};
+{{end}}}
+
+{{end}}export class DefaultApi {
+    private baseURL: string;
+    private interceptors: FetchInterceptor[];
+    private responseTimeoutMs: number | undefined;
+{{if .HasSSE}}
+    private sseIdleTimeoutMs: number | undefined;
+    private sseMaxRetries: number;
+    private sseReconnectBaseDelayMs: number;
+    private sseReconnectOnStreamEnd: boolean;
+{{end}}
+
+    constructor(options: ClientOptions = {}) {
+        this.baseURL = options.baseURL ?? '';
+        this.interceptors = options.interceptors ?? [];
+        this.responseTimeoutMs = configuredTimeout(
+            options,
+            'responseTimeoutMs',
+            defaultResponseTimeoutMs,
+        );
+{{if .HasSSE}}        this.sseIdleTimeoutMs = configuredTimeout(
+            options,
+            'sseIdleTimeoutMs',
+            defaultSSEIdleTimeoutMs,
+        );
+        this.sseMaxRetries = configuredSSEMaxRetries(options);
+        this.sseReconnectBaseDelayMs = configuredSSEReconnectBaseDelayMs(options);
+        this.sseReconnectOnStreamEnd = options.sseReconnectOnStreamEnd ?? true;
+{{end}}
+    }
+
+    private async request(
+        request: Request,
+        initOverrides?: RequestInit,
+    ): Promise<{ response: Response; timeout: ResponseTimeout; request: Request }> {
+        const callerSignal = initOverrides?.signal ?? request.signal;
+        const timeout = responseTimeout(callerSignal, this.responseTimeoutMs);
+        const finalRequest = new Request(request, {
+            ...initOverrides,
+            signal: timeout.signal,
+        });
+        activeResponseTimeoutRequests.add(finalRequest);
+        const timedRequest = {
+            signal: timeout.signal,
+            stop(): void {
+                activeResponseTimeoutRequests.delete(finalRequest);
+                timeout.stop();
+            },
+        };
+        try {
+            return {
+                response: await runInterceptors(finalRequest, this.interceptors),
+                timeout: timedRequest,
+                request: finalRequest,
+            };
+        } catch (error) {
+            timedRequest.stop();
+            throw error;
+        }
+    }
+{{if .HasSSE}}
+    private async sseRequest(
+        request: Request,
+        initOverrides?: RequestInit,
+    ): Promise<{
+        attempt: SSEAttempt;
+        signal: AbortSignal;
+        open(): Promise<SSEAttempt>;
+        dispose(): void;
+    }> {
+        const callerSignal = initOverrides?.signal ?? request.signal;
+        const controller = new AbortController();
+        const abortFromCaller = (): void => controller.abort(callerSignal.reason);
+        if (callerSignal.aborted) {
+            abortFromCaller();
+        } else {
+            callerSignal.addEventListener('abort', abortFromCaller, { once: true });
+        }
+        let disposed = false;
+        const dispose = (): void => {
+            if (disposed) {
+                return;
+            }
+            disposed = true;
+            callerSignal.removeEventListener('abort', abortFromCaller);
+            controller.abort();
+        };
+        let replayRequest = request;
+        const open = async (): Promise<SSEAttempt> => {
+            const opened = await this.request(replayRequest, {
+                ...initOverrides,
+                signal: controller.signal,
+            });
+            replayRequest = opened.request;
+            return { response: opened.response, timeout: opened.timeout };
+        };
+        try {
+            const attempt = await openReconnectingSSE(
+                open,
+                controller.signal,
+                this.sseMaxRetries,
+                this.sseReconnectBaseDelayMs,
+            );
+            return { attempt, signal: controller.signal, open, dispose };
+        } catch (error) {
+            dispose();
+            throw error;
+        }
+    }
+{{end}}
+{{range .Operations}}{{template "operation" .}}{{end}}}
+{{end}}
+
+{{define "operation"}}
+    {{.ID}}Request({{.RequestObjectSignature}}): Request {
+{{range .RequiredParams}}        if (requestParameters['{{.Name}}'] === null || requestParameters['{{.Name}}'] === undefined) {
+            throw new RequiredError('{{.Name}}', 'Required parameter "{{.Name}}" was null or undefined when calling {{$.ID}}().');
+        }
+
+{{end}}        const headerParameters: Record<string, string> = {};
+{{if .HasSSE}}        headerParameters['Accept'] = 'text/event-stream';
+{{end}}{{if .BodyParamName}}        headerParameters['Content-Type'] = 'application/json';
+{{end}}{{if .QueryParams}}        const queryParameters = new URLSearchParams();
+{{range .QueryParams}}{{if .Required}}{{if .Slice}}        for (const value of requestParameters['{{.Name}}']) {
+            queryParameters.append({{printf "%q" .WireName}}, String(value));
+        }
+{{else}}        queryParameters.set({{printf "%q" .WireName}}, String(requestParameters['{{.Name}}']));
+{{end}}{{else}}        {
+            const value = requestParameters['{{.Name}}'];
+            if (value !== null && value !== undefined) {
+{{if .Slice}}                for (const item of value) {
+                    queryParameters.append({{printf "%q" .WireName}}, String(item));
+                }
+{{else}}                queryParameters.set({{printf "%q" .WireName}}, String(value));
+{{end}}            }
+        }
+{{end}}{{end}}        const queryString = queryParameters.toString();
+{{end}}        return new Request(this.baseURL + {{.PathExpression}}{{if .QueryParams}} + (queryString === '' ? '' : '?' + queryString){{end}}, {
+            method: '{{.Method}}',
+            headers: headerParameters,
+{{if .BodyParamName}}            body: JSON.stringify(requestParameters['{{.BodyParamName}}']),
+{{end}}        });
+    }
+
+    async {{.ID}}Result({{.RawRequestSignature}}initOverrides?: RequestInit): Promise<{{.ResultType}}> {
+{{if .HasSSE}}        const sseResponse = await this.sseRequest(this.{{.ID}}Request({{.RequestObjectArgument}}), initOverrides);
+        const timedResponse = sseResponse.attempt;
+        let keepSSE = false;
+{{else}}        const timedResponse = await this.request(this.{{.ID}}Request({{.RequestObjectArgument}}), initOverrides);
+{{end}}        
+        const response = timedResponse.response;
+        try {
+{{range .Responses}}        if (response.status === {{.Status}}) {
+{{if .SSE}}            timedResponse.timeout.stop();
+            const raw = new Response(
+                reconnectingSSEBody(
+                    timedResponse,
+                    () => sseResponse.open(),
+                    sseResponse.signal,
+                    this.sseMaxRetries,
+                    this.sseReconnectBaseDelayMs,
+                    this.sseIdleTimeoutMs,
+                    this.sseReconnectOnStreamEnd,
+                    () => sseResponse.dispose(),
+                ),
+                {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: response.headers,
+                },
+            );
+            keepSSE = true;
+            return { status: {{.Status}}, body: parseEventStream<{{.Type}}>(raw, undefined), raw };
+{{else if .JSON}}            const body: {{.Type}} = await response.json();
+            return { status: {{.Status}}, body, raw: response };
+{{else if .Text}}            const body: {{.Type}} = await response.text();
+            return { status: {{.Status}}, body, raw: response };
+{{else}}            return { status: {{.Status}}, raw: response };
+{{end}}        }
+{{end}}        throw new ResponseError(response, `Unexpected response status ${response.status}`);
+        } finally {
+            timedResponse.timeout.stop();
+{{if .HasSSE}}            if (!keepSSE) {
+                sseResponse.dispose();
+            }
+{{end}}        }
+    }
+
+{{if .HasSSE}}    async *{{.ID}}({{.PositionalSignature}}initOverrides?: RequestInit): AsyncGenerator<{{.SuccessType}}, void, void> {
+        const response = await this.{{.ID}}Result({{.PositionalRequestObject}}initOverrides);
+{{range .SuccessResponses}}        if (response.status === {{.Status}}) {
+{{if .SSE}}            yield* response.body;
+{{end}}            return;
+        }
+{{end}}        throw new ResponseError(response.raw);
+{{else}}    async {{.ID}}({{.PositionalSignature}}initOverrides?: RequestInit): Promise<{{.SuccessType}}> {
+        const response = await this.{{.ID}}Result({{.PositionalRequestObject}}initOverrides);
+{{range .SuccessResponses}}        if (response.status === {{.Status}}) {
+{{if .Body}}            return response.body;
+{{else}}            return;
+{{end}}        }
+{{end}}        throw new ResponseError(response.raw);
+{{end}}    }
+{{end}}
