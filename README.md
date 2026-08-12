@@ -1,6 +1,7 @@
 # OASmith
 
-OASmith generates focused Go and TypeScript code from OpenAPI YAML documents.
+OASmith generates focused Go and TypeScript code from OpenAPI YAML or JSON
+documents.
 It supports focused generation modes without the runtime and configuration
 surface of a general-purpose OpenAPI generator.
 
@@ -36,10 +37,13 @@ oasmith \
 
 Every invocation requires:
 
-- `--openapi`: input OpenAPI YAML document;
+- `--openapi`: input OpenAPI YAML or JSON document;
 - `--mode`: `types` or `client`;
 - `--lang`: `go` or `typescript`, subject to the supported pairs above;
 - `--out`: generated output directory.
+
+JSON input is supported alongside YAML. The document syntax is accepted
+directly, so `.json` and `.yaml` file names work with the same command.
 
 When `nubx` is available, OASmith runs its pinned Oxfmt version through
 `nubx`'s local discovery and registry fallback. No Node project or installed

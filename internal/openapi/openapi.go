@@ -150,7 +150,7 @@ type OperationRoute struct {
 	Operation *Operation
 }
 
-// ParseFile reads and parses an OpenAPI YAML document.
+// ParseFile reads and parses an OpenAPI YAML or JSON document.
 func ParseFile(path string) (*Document, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -159,11 +159,15 @@ func ParseFile(path string) (*Document, error) {
 	return Parse(raw)
 }
 
-// Parse parses an OpenAPI YAML document from raw bytes.
+// Parse parses an OpenAPI YAML or JSON document from raw bytes.
+//
+// OpenAPI documents may use either YAML or JSON syntax. YAML 1.2 is a
+// superset of JSON, so the YAML decoder accepts both representations while
+// preserving the same document model and validation behavior.
 func Parse(raw []byte) (*Document, error) {
 	var doc Document
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("parse openapi yaml: %w", err)
+		return nil, fmt.Errorf("parse openapi document: %w", err)
 	}
 	if doc.OpenAPI != "3.1.0" && doc.OpenAPI != "3.2.0" {
 		return nil, fmt.Errorf("unsupported OpenAPI version %q; expected 3.1.0 or 3.2.0", doc.OpenAPI)

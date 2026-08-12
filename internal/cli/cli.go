@@ -44,7 +44,7 @@ func Run(args []string) error {
 func Parse(args []string) (Options, error) {
 	var opts Options
 	fs := flag.NewFlagSet("oasmith", flag.ContinueOnError)
-	fs.StringVar(&opts.OpenAPI, "openapi", "", "OpenAPI YAML document")
+	fs.StringVar(&opts.OpenAPI, "openapi", "", "OpenAPI YAML or JSON document")
 	fs.StringVar(&opts.Mode, "mode", "", "generation mode")
 	fs.StringVar(&opts.Lang, "lang", "", "output language")
 	fs.StringVar(&opts.Out, "out", "", "output directory")

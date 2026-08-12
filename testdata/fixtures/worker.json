@@ -1,0 +1,65 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Worker Config Schema",
+    "version": "1"
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "WorkerQueue": {
+        "type": "string",
+        "enum": ["compute"]
+      },
+      "NonEmptyString": {
+        "type": "string",
+        "minLength": 1
+      },
+      "SSLMode": {
+        "type": "string",
+        "enum": [
+          "disable",
+          "allow",
+          "prefer",
+          "require",
+          "verify-ca",
+          "verify-full"
+        ]
+      },
+      "DBConfig": {
+        "type": "object",
+        "properties": {
+          "host": {"$ref": "#/components/schemas/NonEmptyString"},
+          "port": {"minimum": 1, "maximum": 65535, "type": "integer", "format": "int32"},
+          "name": {"$ref": "#/components/schemas/NonEmptyString"},
+          "user": {"$ref": "#/components/schemas/NonEmptyString"},
+          "password": {"$ref": "#/components/schemas/NonEmptyString"},
+          "sslmode": {"$ref": "#/components/schemas/SSLMode"},
+          "max_conns": {"minimum": 1, "type": "integer", "format": "int32"},
+          "assert_migration_schema": {"type": "boolean"}
+        },
+        "required": [
+          "host",
+          "port",
+          "name",
+          "user",
+          "password",
+          "sslmode",
+          "max_conns"
+        ]
+      },
+      "WorkerConfig": {
+        "type": "object",
+        "properties": {
+          "queues": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/WorkerQueue"},
+            "minItems": 1
+          },
+          "db": {"$ref": "#/components/schemas/DBConfig"}
+        },
+        "required": ["queues", "db"]
+      }
+    }
+  }
+}

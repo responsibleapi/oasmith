@@ -38,6 +38,14 @@ func TestGoldenFixtures(t *testing.T) {
 			},
 		},
 		{
+			name:    "worker-json-go",
+			fixture: "worker.json",
+			golden:  "worker-go",
+			emit: func(doc *openapi.Document, outDir string, sourcePath string) error {
+				return goemit.Emit(doc, goemit.Options{OutDir: outDir, SourcePath: sourcePath})
+			},
+		},
+		{
 			name:    "public-client-go",
 			fixture: "public-client.yaml",
 			golden:  "public-client-go",
@@ -108,6 +116,27 @@ func TestGoOneOfOutputForConfigDiscriminators(t *testing.T) {
 		if !strings.Contains(source, want) {
 			t.Fatalf("models.go missing %q", want)
 		}
+	}
+}
+
+func TestJSONFixtureGeneratesTypeScript(t *testing.T) {
+	t.Parallel()
+
+	fixturePath := filepath.Join("testdata", "fixtures", "worker.json")
+	doc, err := openapi.ParseFile(fixturePath)
+	if err != nil {
+		t.Fatalf("parse JSON fixture: %v", err)
+	}
+	outDir := t.TempDir()
+	if err := tsemit.Emit(doc, tsemit.Options{OutDir: outDir}); err != nil {
+		t.Fatalf("emit TypeScript from JSON fixture: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(outDir, "types.ts"))
+	if err != nil {
+		t.Fatalf("read generated TypeScript types: %v", err)
+	}
+	if !strings.Contains(string(raw), "export interface WorkerConfig") {
+		t.Fatalf("generated TypeScript types missing WorkerConfig:\n%s", raw)
 	}
 }
 
