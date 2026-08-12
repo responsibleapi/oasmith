@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info: 
-  title: Listenbox Worker Config Schema
+  title: Worker Config Schema
   version: "1"
 paths: 
   {}

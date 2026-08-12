@@ -1,11 +1,11 @@
-// Package main contains the OAScribe CLI entrypoint.
+// Package main contains the OASmith CLI entrypoint.
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/meoyawn/oascribe/internal/cli"
+	"github.com/meoyawn/oasmith/internal/cli"
 )
 
 func main() {

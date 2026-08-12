@@ -1,4 +1,4 @@
-module github.com/meoyawn/oascribe
+module github.com/meoyawn/oasmith
 
 go 1.26
 

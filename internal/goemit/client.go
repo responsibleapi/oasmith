@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/meoyawn/oascribe/internal/openapi"
+	"github.com/meoyawn/oasmith/internal/openapi"
 )
 
 type goClientData struct {

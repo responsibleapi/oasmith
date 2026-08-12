@@ -1,16 +1,16 @@
-// Package cli parses arguments and dispatches OAScribe modes.
+// Package cli parses arguments and dispatches OASmith modes.
 package cli
 
 import (
 	"flag"
 	"fmt"
 
-	"github.com/meoyawn/oascribe/internal/goemit"
-	"github.com/meoyawn/oascribe/internal/openapi"
-	"github.com/meoyawn/oascribe/internal/tsemit"
+	"github.com/meoyawn/oasmith/internal/goemit"
+	"github.com/meoyawn/oasmith/internal/openapi"
+	"github.com/meoyawn/oasmith/internal/tsemit"
 )
 
-// Options holds parsed OAScribe command-line flags.
+// Options holds parsed OASmith command-line flags.
 type Options struct {
 	OpenAPI string
 	Mode    string
@@ -43,16 +43,16 @@ func Run(args []string) error {
 // Parse converts command-line arguments into generator options.
 func Parse(args []string) (Options, error) {
 	var opts Options
-	fs := flag.NewFlagSet("oascribe", flag.ContinueOnError)
+	fs := flag.NewFlagSet("oasmith", flag.ContinueOnError)
 	fs.StringVar(&opts.OpenAPI, "openapi", "", "OpenAPI YAML document")
 	fs.StringVar(&opts.Mode, "mode", "", "generation mode")
 	fs.StringVar(&opts.Lang, "lang", "", "output language")
 	fs.StringVar(&opts.Out, "out", "", "output directory")
 	if err := fs.Parse(args); err != nil {
-		return Options{}, fmt.Errorf("usage: oascribe --openapi <openapidoc> --mode <types|client> --lang <go|typescript> --out <dir>")
+		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript> --out <dir>")
 	}
 	if opts.OpenAPI == "" || opts.Mode == "" || opts.Lang == "" || opts.Out == "" {
-		return Options{}, fmt.Errorf("usage: oascribe --openapi <openapidoc> --mode <types|client> --lang <go|typescript> --out <dir>")
+		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript> --out <dir>")
 	}
 	if (opts.Mode == "types" && opts.Lang == "go") ||
 		(opts.Mode == "client" && (opts.Lang == "go" || opts.Lang == "typescript")) {

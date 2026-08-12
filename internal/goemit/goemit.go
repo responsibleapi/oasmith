@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/meoyawn/oascribe/internal/emit"
-	"github.com/meoyawn/oascribe/internal/openapi"
+	"github.com/meoyawn/oasmith/internal/emit"
+	"github.com/meoyawn/oasmith/internal/openapi"
 )
 
 // Options configures Go model emission.

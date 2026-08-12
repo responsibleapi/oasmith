@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/meoyawn/oascribe/internal/cli"
+	"github.com/meoyawn/oasmith/internal/cli"
 )
 
 func TestParseRequiresFlags(t *testing.T) {
@@ -14,7 +14,7 @@ func TestParseRequiresFlags(t *testing.T) {
 	if err == nil {
 		t.Fatal("Parse without --out succeeded")
 	}
-	if !strings.Contains(err.Error(), "usage: oascribe") {
+	if !strings.Contains(err.Error(), "usage: oasmith") {
 		t.Fatalf("Parse error = %q, want usage", err.Error())
 	}
 }

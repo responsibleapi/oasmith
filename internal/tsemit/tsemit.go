@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/meoyawn/oascribe/internal/emit"
-	"github.com/meoyawn/oascribe/internal/openapi"
+	"github.com/meoyawn/oasmith/internal/emit"
+	"github.com/meoyawn/oasmith/internal/openapi"
 )
 
 // Options configures TypeScript client emission.
@@ -59,7 +59,7 @@ func formatTypescript(files map[string]string) error {
 	// rejects explicitly passed files when its default ignore rules exclude them.
 	// Format temporary copies outside the generated tree, then copy the result
 	// back to keep the generated output formatted without changing ignore rules.
-	formatDir, err := os.MkdirTemp(".", ".listenbox-oxfmt-")
+	formatDir, err := os.MkdirTemp(".", ".oasmith-oxfmt-")
 	if err != nil {
 		return fmt.Errorf("create oxfmt directory: %w", err)
 	}

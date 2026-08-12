@@ -1,6 +1,6 @@
 openapi: 3.2.0
 info: 
-  title: Listenbox Private API
+  title: Private API
   version: "1"
 paths: 
   /session: 
@@ -719,7 +719,7 @@ components:
   securitySchemes: 
     SessionAuth: 
       type: http
-      description: Listenbox session token.
+      description: Session token.
       scheme: bearer
   responses: 
     RespValidationErr: 

@@ -1,8 +1,8 @@
-# OAScribe
+# OASmith
 
-OAScribe generates focused Go and TypeScript code from OpenAPI YAML documents.
-It supports the generation modes used by Listenbox without the runtime and
-configuration surface of a general-purpose OpenAPI generator.
+OASmith generates focused Go and TypeScript code from OpenAPI YAML documents.
+It supports focused generation modes without the runtime and configuration
+surface of a general-purpose OpenAPI generator.
 
 ## Supported output
 
@@ -12,22 +12,22 @@ configuration surface of a general-purpose OpenAPI generator.
 | `client` | `go` | Go models and HTTP client |
 | `client` | `typescript` | TypeScript types and HTTP client |
 
-OAScribe handles the OpenAPI schema and operation subset covered by its fixture
+OASmith handles the OpenAPI schema and operation subset covered by its fixture
 suite, including objects, arrays, enums, `oneOf` discriminators, parameters,
 request bodies, responses, and server-sent event operations.
 
 ## Install
 
-OAScribe requires Go 1.26 or newer.
+OASmith requires Go 1.26 or newer.
 
 ```sh
-go install github.com/meoyawn/oascribe/cmd/oascribe@latest
+go install github.com/meoyawn/oasmith/cmd/oasmith@latest
 ```
 
 ## Usage
 
 ```sh
-oascribe \
+oasmith \
   --openapi ./openapi.yaml \
   --mode client \
   --lang go \
@@ -41,7 +41,7 @@ Every invocation requires:
 - `--lang`: `go` or `typescript`, subject to the supported pairs above;
 - `--out`: generated output directory.
 
-When `nubx` is available, OAScribe runs its pinned Oxfmt version through
+When `nubx` is available, OASmith runs its pinned Oxfmt version through
 `nubx`'s local discovery and registry fallback. No Node project or installed
 Oxfmt dependency is required. Generation still works without `nubx`.
 

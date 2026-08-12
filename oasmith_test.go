@@ -1,4 +1,4 @@
-package oascribe_test
+package oasmith_test
 
 import (
 	"os"
@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/meoyawn/oascribe/internal/goemit"
-	"github.com/meoyawn/oascribe/internal/openapi"
-	"github.com/meoyawn/oascribe/internal/tsemit"
+	"github.com/meoyawn/oasmith/internal/goemit"
+	"github.com/meoyawn/oasmith/internal/openapi"
+	"github.com/meoyawn/oasmith/internal/tsemit"
 )
 
 func TestGoldenFixtures(t *testing.T) {
