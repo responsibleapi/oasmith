@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/meoyawn/oasmith/internal/cli"
+	"github.com/responsibleapi/oasmith/internal/cli"
 )
 
 func TestParseRequiresFlags(t *testing.T) {

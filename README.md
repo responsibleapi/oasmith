@@ -22,7 +22,7 @@ request bodies, responses, and server-sent event operations.
 OASmith requires Go 1.26 or newer.
 
 ```sh
-go install github.com/meoyawn/oasmith/cmd/oasmith@latest
+go install github.com/responsibleapi/oasmith/cmd/oasmith@latest
 ```
 
 ## Usage

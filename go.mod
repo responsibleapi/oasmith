@@ -1,4 +1,4 @@
-module github.com/meoyawn/oasmith
+module github.com/responsibleapi/oasmith
 
 go 1.26
 

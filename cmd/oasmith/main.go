@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/meoyawn/oasmith/internal/cli"
+	"github.com/responsibleapi/oasmith/internal/cli"
 )
 
 func main() {

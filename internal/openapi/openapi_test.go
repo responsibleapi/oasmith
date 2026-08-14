@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/meoyawn/oasmith/internal/openapi"
+	"github.com/responsibleapi/oasmith/internal/openapi"
 )
 
 func TestParseOpenAPI32PrivateFixture(t *testing.T) {

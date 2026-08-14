@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/meoyawn/oasmith/internal/goemit"
-	"github.com/meoyawn/oasmith/internal/openapi"
-	"github.com/meoyawn/oasmith/internal/tsemit"
+	"github.com/responsibleapi/oasmith/internal/goemit"
+	"github.com/responsibleapi/oasmith/internal/openapi"
+	"github.com/responsibleapi/oasmith/internal/tsemit"
 )
 
 func TestGoldenFixtures(t *testing.T) {
