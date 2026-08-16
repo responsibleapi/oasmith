@@ -300,6 +300,63 @@ import assert from "node:assert/strict"
 import { DefaultApi, type FetchInterceptor } from "./api.ts"
 
 void describe("api interceptors", () => {
+  void test("passes the final intercepted request to a custom fetch", async () => {
+    let fetchedRequest: Request | undefined
+    const api = new DefaultApi({
+      baseURL: "https://example.test",
+      fetch: async request => {
+        assert.ok(request instanceof Request)
+        fetchedRequest = request
+        return new Response("[]")
+      },
+      interceptors: [
+        async chain => {
+          const headers = new Headers(chain.request.headers)
+          headers.set("traceparent", "custom-trace")
+          return await chain.proceed(new Request(chain.request, { headers }))
+        },
+      ],
+    })
+
+    await api.listTestEmails()
+
+    assert.ok(fetchedRequest instanceof Request)
+    assert.equal(fetchedRequest.headers.get("traceparent"), "custom-trace")
+  })
+
+  void test("uses custom fetch for SSE reconnects", async () => {
+    let fetchCalls = 0
+    const encoder = new TextEncoder()
+    const api = new DefaultApi({
+      baseURL: "https://example.test",
+      fetch: async () => {
+        fetchCalls += 1
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode("data: {}\n\n"))
+            controller.close()
+          },
+        }), { headers: { "content-type": "text/event-stream" } })
+      },
+      responseTimeoutMs: 0,
+      sseMaxRetries: 1,
+      sseReconnectBaseDelayMs: 0,
+    })
+
+    const response = await api.episodeProcessingEventsResult({
+      episodeId: "episode_1",
+      showId: "show_1",
+      teamId: "team_1",
+    })
+    assert.equal(response.status, 200)
+    if (response.status !== 200) throw new Error("unexpected status")
+    const iterator = response.body[Symbol.asyncIterator]()
+    assert.equal((await iterator.next()).done, false)
+    assert.equal((await iterator.next()).done, false)
+    assert.equal(fetchCalls, 2)
+    await iterator.return?.()
+  })
+
   void test("run in order and allow repeated proceed", async () => {
     const events: Array<string> = []
     const interceptors: Array<FetchInterceptor> = [
