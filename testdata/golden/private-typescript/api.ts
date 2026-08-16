@@ -50,6 +50,7 @@ export type FetchInterceptorChain = {
 
 export type ClientOptions = {
   baseURL?: string
+  fetch?: typeof globalThis.fetch
   interceptors?: FetchInterceptor[]
   responseTimeoutMs?: number
   sseIdleTimeoutMs?: number
@@ -555,6 +556,7 @@ async function* parseEventStream<T>(
 async function runInterceptors(
   request: Request,
   interceptors: FetchInterceptor[],
+  fetch: typeof globalThis.fetch,
 ): Promise<Response> {
   async function dispatch(
     index: number,
@@ -686,6 +688,7 @@ export interface RenderShowRSSFeedRequest {
 
 export class DefaultApi {
   private baseURL: string
+  private fetch: typeof globalThis.fetch
   private interceptors: FetchInterceptor[]
   private responseTimeoutMs: number | undefined
 
@@ -696,6 +699,7 @@ export class DefaultApi {
 
   constructor(options: ClientOptions = {}) {
     this.baseURL = options.baseURL ?? ""
+    this.fetch = options.fetch ?? globalThis.fetch
     this.interceptors = options.interceptors ?? []
     this.responseTimeoutMs = configuredTimeout(
       options,
@@ -736,7 +740,11 @@ export class DefaultApi {
     }
     try {
       return {
-        response: await runInterceptors(finalRequest, this.interceptors),
+        response: await runInterceptors(
+          finalRequest,
+          this.interceptors,
+          this.fetch,
+        ),
         timeout: timedRequest,
         request: finalRequest,
       }
