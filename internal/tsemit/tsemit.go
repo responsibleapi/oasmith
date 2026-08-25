@@ -639,7 +639,7 @@ func pathExpression(path string, params []opParam) string {
 		if param.Kind != "path" {
 			continue
 		}
-		expr = strings.ReplaceAll(expr, "{"+param.WireName+"}", "${encodeURIComponent(String(requestParameters['"+param.Name+"']))}")
+		expr = strings.ReplaceAll(expr, "{"+param.WireName+"}", "${encodeURIComponent(requestParameters['"+param.Name+"'])}")
 	}
 	if strings.Contains(expr, "${") {
 		return "`" + expr + "`"

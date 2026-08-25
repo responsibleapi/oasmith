@@ -182,6 +182,12 @@ func TestTypeScriptClientQueries(t *testing.T) {
 	if !strings.Contains(string(raw), "const queryParameters = new URLSearchParams()") {
 		t.Fatal("generated TypeScript API does not use URLSearchParams")
 	}
+	if !strings.Contains(string(raw), `encodeURIComponent(requestParameters["thingId"])`) {
+		t.Fatal("generated TypeScript API does not directly escape path parameters")
+	}
+	if strings.Contains(string(raw), "encodeURIComponent(String(") {
+		t.Fatal("generated TypeScript API unnecessarily converts path parameters")
+	}
 	testPath := filepath.Join(outDir, "query.test.ts")
 	if err := os.WriteFile(testPath, []byte(typescriptQueryBehaviorTest), 0o644); err != nil {
 		t.Fatalf("write TypeScript query test: %v", err)
