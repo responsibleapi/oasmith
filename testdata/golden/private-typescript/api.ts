@@ -1496,7 +1496,7 @@ export class DefaultApi {
     const headerParameters: Record<string, string> = {}
     return new Request(
       this.baseURL +
-        `/session/pages/show/${encodeURIComponent(String(requestParameters["showId"]))}`,
+        `/session/pages/show/${encodeURIComponent(requestParameters["showId"])}`,
       {
         method: "GET",
         headers: headerParameters,
@@ -1567,7 +1567,7 @@ export class DefaultApi {
     const headerParameters: Record<string, string> = {}
     return new Request(
       this.baseURL +
-        `/session/pages/shows/${encodeURIComponent(String(requestParameters["teamId"]))}`,
+        `/session/pages/shows/${encodeURIComponent(requestParameters["teamId"])}`,
       {
         method: "GET",
         headers: headerParameters,
@@ -1716,7 +1716,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/image-uploads/presign`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/image-uploads/presign`,
       {
         method: "POST",
         headers: headerParameters,
@@ -1805,7 +1805,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/media-uploads/multipart`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/multipart`,
       {
         method: "POST",
         headers: headerParameters,
@@ -1894,7 +1894,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/media-uploads/presign`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/presign`,
       {
         method: "POST",
         headers: headerParameters,
@@ -1993,7 +1993,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/media-uploads/${encodeURIComponent(String(requestParameters["uploadSessionId"]))}/complete`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/${encodeURIComponent(requestParameters["uploadSessionId"])}/complete`,
       {
         method: "POST",
         headers: headerParameters,
@@ -2093,7 +2093,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/media-uploads/${encodeURIComponent(String(requestParameters["uploadSessionId"]))}/parts/presign`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/${encodeURIComponent(requestParameters["uploadSessionId"])}/parts/presign`,
       {
         method: "POST",
         headers: headerParameters,
@@ -2170,7 +2170,7 @@ export class DefaultApi {
     const headerParameters: Record<string, string> = {}
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/shows`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows`,
       {
         method: "GET",
         headers: headerParameters,
@@ -2248,7 +2248,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/shows`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows`,
       {
         method: "POST",
         headers: headerParameters,
@@ -2349,7 +2349,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/shows/${encodeURIComponent(String(requestParameters["showId"]))}`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}`,
       {
         method: "PUT",
         headers: headerParameters,
@@ -2432,7 +2432,7 @@ export class DefaultApi {
     const headerParameters: Record<string, string> = {}
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/shows/${encodeURIComponent(String(requestParameters["showId"]))}/episodes`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes`,
       {
         method: "GET",
         headers: headerParameters,
@@ -2524,7 +2524,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/shows/${encodeURIComponent(String(requestParameters["showId"]))}/episodes`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes`,
       {
         method: "POST",
         headers: headerParameters,
@@ -2628,7 +2628,7 @@ export class DefaultApi {
     headerParameters["Content-Type"] = "application/json"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/shows/${encodeURIComponent(String(requestParameters["showId"]))}/episodes/${encodeURIComponent(String(requestParameters["episodeId"]))}`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes/${encodeURIComponent(requestParameters["episodeId"])}`,
       {
         method: "PUT",
         headers: headerParameters,
@@ -2725,7 +2725,7 @@ export class DefaultApi {
     headerParameters["Accept"] = "text/event-stream"
     return new Request(
       this.baseURL +
-        `/session/teams/${encodeURIComponent(String(requestParameters["teamId"]))}/shows/${encodeURIComponent(String(requestParameters["showId"]))}/episodes/${encodeURIComponent(String(requestParameters["episodeId"]))}/episode-events`,
+        `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes/${encodeURIComponent(requestParameters["episodeId"])}/episode-events`,
       {
         method: "GET",
         headers: headerParameters,
@@ -2892,8 +2892,7 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     return new Request(
-      this.baseURL +
-        `/${encodeURIComponent(String(requestParameters["feedId"]))}.rss`,
+      this.baseURL + `/${encodeURIComponent(requestParameters["feedId"])}.rss`,
       {
         method: "GET",
         headers: headerParameters,
