@@ -33,6 +33,7 @@ linters:
     # Subjective or project-policy checks not adopted by OASmith.
     - depguard
     - exhaustruct
+    - exhaustruct_v5
     - forbidigo
     - funlen
     - gochecknoglobals

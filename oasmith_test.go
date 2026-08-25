@@ -212,7 +212,7 @@ func TestGoClientBehavior(t *testing.T) {
 		t.Fatalf("emit Go client: %v", err)
 	}
 	for name, source := range map[string]string{
-		"go.mod":         "module generatedclient\n\ngo 1.26\n",
+		"go.mod":         "module generatedclient\n\ngo 1.27.0\n",
 		"client_test.go": goClientBehaviorTest,
 	} {
 		if err := os.WriteFile(filepath.Join(outDir, name), []byte(source), 0o644); err != nil {
