@@ -49,6 +49,16 @@ When `nubx` is available, OASmith runs its pinned Oxfmt version through
 `nubx`'s local discovery and registry fallback. No Node project or installed
 Oxfmt dependency is required. Generation still works without `nubx`.
 
+Generated clients use the first document-level server by default and the first
+operation-level server for that operation. An explicit client base URL always
+overrides either declaration.
+
+TypeScript clients emit JSON bodies, raw bodies as `BodyInit`, and fixed-length
+ordered multipart bodies declared with `prefixItems` and `prefixEncoding`.
+Binary multipart parts are `Blob` values; their media types must match the
+content types declared by the corresponding prefix encoding. Unsupported
+request-body shapes fail generation.
+
 ## OpenTelemetry trace propagation
 
 Generated clients leave OpenTelemetry dependencies and SDK setup to the

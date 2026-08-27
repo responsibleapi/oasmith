@@ -42,7 +42,31 @@ export class ResponseError extends Error {
     }
 }
 
-type ResponseTimeout = {
+{{if .HasMultipartBody}}function multipartContentTypeAllowed(value: string, allowedValues: string): boolean {
+    const [mediaType] = value.trim().toLowerCase().split(';', 1);
+    const [major, minor, extra] = mediaType.split('/');
+    if (major === '' || minor === '' || extra !== undefined) {
+        return false;
+    }
+    for (const allowedValue of allowedValues.split(',')) {
+        const [allowedType] = allowedValue.trim().toLowerCase().split(';', 1);
+        const [allowedMajor, allowedMinor, allowedExtra] = allowedType.split('/');
+        if (
+            allowedExtra === undefined &&
+            major === allowedMajor &&
+            (minor === allowedMinor || allowedMinor === '*')
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function newMultipartBoundary(): string {
+    return 'oasmith-' + crypto.randomUUID();
+}
+
+{{end}}type ResponseTimeout = {
     signal: AbortSignal;
     stop(): void;
 };
@@ -513,6 +537,7 @@ async function runInterceptors(
 
 {{end}}export class DefaultApi {
     private baseURL: string;
+    private baseURLOverride: boolean;
     private fetch: typeof globalThis.fetch;
     private interceptors: FetchInterceptor[];
     private responseTimeoutMs: number | undefined;
@@ -524,7 +549,8 @@ async function runInterceptors(
 {{end}}
 
     constructor(options: ClientOptions = {}) {
-        this.baseURL = options.baseURL ?? '';
+        this.baseURLOverride = options.baseURL !== undefined;
+        this.baseURL = options.baseURL ?? {{if .DefaultServerURL}}{{printf "%q" .DefaultServerURL}}{{else}}''{{end}};
         this.fetch = options.fetch ?? globalThis.fetch;
         this.interceptors = options.interceptors ?? [];
         this.responseTimeoutMs = configuredTimeout(
@@ -631,9 +657,25 @@ async function runInterceptors(
             throw new RequiredError('{{.Name}}', 'Required parameter "{{.Name}}" was null or undefined when calling {{$.ID}}().');
         }
 
-{{end}}        const headerParameters: Record<string, string> = {};
+{{end}}{{with .MultipartBody}}{{range .Parts}}{{if .Binary}}        if (!multipartContentTypeAllowed(requestParameters['{{.Name}}'].type, {{printf "%q" .AllowedContentType}})) {
+            throw new TypeError('Multipart part {{.Name}} content type "' + requestParameters['{{.Name}}'].type + '" is not allowed');
+        }
+
+{{end}}{{end}}{{end}}        const headerParameters: Record<string, string> = {};
 {{if .HasSSE}}        headerParameters['Accept'] = 'text/event-stream';
 {{end}}{{if .BodyParamName}}        headerParameters['Content-Type'] = 'application/json';
+{{end}}{{if .RawBodyParamName}}        headerParameters['Content-Type'] = {{printf "%q" .RawBodyMediaType}};
+{{end}}{{with .MultipartBody}}        const multipartBoundary = newMultipartBoundary();
+        headerParameters['Content-Type'] = {{printf "%q" .MediaType}} + '; boundary=' + multipartBoundary;
+        const multipartBody = new Blob([
+{{range .Parts}}            '--' + multipartBoundary + '\r\n',
+{{if .Binary}}            'Content-Type: ' + requestParameters['{{.Name}}'].type + '\r\n\r\n',
+            requestParameters['{{.Name}}'],
+{{else}}            {{printf "%q" (printf "Content-Type: %s\r\n\r\n" .ContentType)}},
+            JSON.stringify(requestParameters['{{.Name}}']),
+{{end}}            '\r\n',
+{{end}}            '--' + multipartBoundary + '--\r\n',
+        ]);
 {{end}}{{if .QueryParams}}        const queryParameters = new URLSearchParams();
 {{range .QueryParams}}{{if .Required}}{{if .Slice}}        for (const value of requestParameters['{{.Name}}']) {
             queryParameters.append({{printf "%q" .WireName}}, String(value));
@@ -649,10 +691,13 @@ async function runInterceptors(
 {{end}}            }
         }
 {{end}}{{end}}        const queryString = queryParameters.toString();
-{{end}}        return new Request(this.baseURL + {{.PathExpression}}{{if .QueryParams}} + (queryString === '' ? '' : '?' + queryString){{end}}, {
+{{end}}        const baseURL = {{if .ServerURL}}this.baseURLOverride ? this.baseURL : {{printf "%q" .ServerURL}}{{else}}this.baseURL{{end}};
+        return new Request(baseURL + {{.PathExpression}}{{if .QueryParams}} + (queryString === '' ? '' : '?' + queryString){{end}}, {
             method: '{{.Method}}',
             headers: headerParameters,
 {{if .BodyParamName}}            body: JSON.stringify(requestParameters['{{.BodyParamName}}']),
+{{else if .RawBodyParamName}}            body: requestParameters['{{.RawBodyParamName}}'],
+{{else if .MultipartBody}}            body: multipartBody,
 {{end}}        });
     }
 

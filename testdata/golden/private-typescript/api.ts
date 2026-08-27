@@ -688,6 +688,7 @@ export interface RenderShowRSSFeedRequest {
 
 export class DefaultApi {
   private baseURL: string
+  private baseURLOverride: boolean
   private fetch: typeof globalThis.fetch
   private interceptors: FetchInterceptor[]
   private responseTimeoutMs: number | undefined
@@ -698,6 +699,7 @@ export class DefaultApi {
   private sseReconnectOnStreamEnd: boolean
 
   constructor(options: ClientOptions = {}) {
+    this.baseURLOverride = options.baseURL !== undefined
     this.baseURL = options.baseURL ?? ""
     this.fetch = options.fetch ?? globalThis.fetch
     this.interceptors = options.interceptors ?? []
@@ -816,7 +818,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/auth/email/verify", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/auth/email/verify", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["emailVerification"]),
@@ -886,7 +889,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/auth/google/signup", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/auth/google/signup", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["googleSignup"]),
@@ -952,7 +956,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/auth/login", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/auth/login", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["passwordAuth"]),
@@ -1026,7 +1031,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/auth/password/reset/confirm", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/auth/password/reset/confirm", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["passwordResetConfirmation"]),
@@ -1096,7 +1102,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/auth/password/reset/request", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/auth/password/reset/request", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["passwordResetRequest"]),
@@ -1158,7 +1165,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/auth/signup", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/auth/signup", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["passwordAuth"]),
@@ -1214,7 +1222,8 @@ export class DefaultApi {
 
   whoamiRequest(): Request {
     const headerParameters: Record<string, string> = {}
-    return new Request(this.baseURL + "/session", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/session", {
       method: "GET",
       headers: headerParameters,
     })
@@ -1263,7 +1272,8 @@ export class DefaultApi {
 
   listAPIKeysRequest(): Request {
     const headerParameters: Record<string, string> = {}
-    return new Request(this.baseURL + "/session/api-keys", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/session/api-keys", {
       method: "GET",
       headers: headerParameters,
     })
@@ -1325,7 +1335,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/session/api-keys", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/session/api-keys", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["createAPIKey"]),
@@ -1382,7 +1393,8 @@ export class DefaultApi {
 
   appShellRequest(): Request {
     const headerParameters: Record<string, string> = {}
-    return new Request(this.baseURL + "/session/app-shell", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/session/app-shell", {
       method: "GET",
       headers: headerParameters,
     })
@@ -1431,7 +1443,8 @@ export class DefaultApi {
 
   defaultTeamRequest(): Request {
     const headerParameters: Record<string, string> = {}
-    return new Request(this.baseURL + "/session/default-team", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/session/default-team", {
       method: "GET",
       headers: headerParameters,
     })
@@ -1494,8 +1507,9 @@ export class DefaultApi {
     }
 
     const headerParameters: Record<string, string> = {}
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/pages/show/${encodeURIComponent(requestParameters["showId"])}`,
       {
         method: "GET",
@@ -1565,8 +1579,9 @@ export class DefaultApi {
     }
 
     const headerParameters: Record<string, string> = {}
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/pages/shows/${encodeURIComponent(requestParameters["teamId"])}`,
       {
         method: "GET",
@@ -1637,7 +1652,8 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
-    return new Request(this.baseURL + "/session/teams", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/session/teams", {
       method: "POST",
       headers: headerParameters,
       body: JSON.stringify(requestParameters["createTeam"]),
@@ -1714,8 +1730,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/image-uploads/presign`,
       {
         method: "POST",
@@ -1803,8 +1820,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/multipart`,
       {
         method: "POST",
@@ -1892,8 +1910,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/presign`,
       {
         method: "POST",
@@ -1991,8 +2010,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/${encodeURIComponent(requestParameters["uploadSessionId"])}/complete`,
       {
         method: "POST",
@@ -2091,8 +2111,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/media-uploads/${encodeURIComponent(requestParameters["uploadSessionId"])}/parts/presign`,
       {
         method: "POST",
@@ -2168,8 +2189,9 @@ export class DefaultApi {
     }
 
     const headerParameters: Record<string, string> = {}
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows`,
       {
         method: "GET",
@@ -2246,8 +2268,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows`,
       {
         method: "POST",
@@ -2347,8 +2370,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}`,
       {
         method: "PUT",
@@ -2430,8 +2454,9 @@ export class DefaultApi {
     }
 
     const headerParameters: Record<string, string> = {}
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes`,
       {
         method: "GET",
@@ -2522,8 +2547,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes`,
       {
         method: "POST",
@@ -2626,8 +2652,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Content-Type"] = "application/json"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes/${encodeURIComponent(requestParameters["episodeId"])}`,
       {
         method: "PUT",
@@ -2723,8 +2750,9 @@ export class DefaultApi {
 
     const headerParameters: Record<string, string> = {}
     headerParameters["Accept"] = "text/event-stream"
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL +
+      baseURL +
         `/session/teams/${encodeURIComponent(requestParameters["teamId"])}/shows/${encodeURIComponent(requestParameters["showId"])}/episodes/${encodeURIComponent(requestParameters["episodeId"])}/episode-events`,
       {
         method: "GET",
@@ -2828,7 +2856,8 @@ export class DefaultApi {
 
   listTestEmailsRequest(): Request {
     const headerParameters: Record<string, string> = {}
-    return new Request(this.baseURL + "/test/emails", {
+    const baseURL = this.baseURL
+    return new Request(baseURL + "/test/emails", {
       method: "GET",
       headers: headerParameters,
     })
@@ -2891,8 +2920,9 @@ export class DefaultApi {
     }
 
     const headerParameters: Record<string, string> = {}
+    const baseURL = this.baseURL
     return new Request(
-      this.baseURL + `/${encodeURIComponent(requestParameters["feedId"])}.rss`,
+      baseURL + `/${encodeURIComponent(requestParameters["feedId"])}.rss`,
       {
         method: "GET",
         headers: headerParameters,

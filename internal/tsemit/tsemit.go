@@ -187,8 +187,16 @@ func modelsTemplateData(doc *openapi.Document) modelsData {
 
 func apiSource(doc *openapi.Document) (string, error) {
 	operations := doc.Operations()
+	for _, route := range operations {
+		if err := validateRequestBody(route.Operation); err != nil {
+			return "", err
+		}
+	}
 	data := apiData{
 		Imports: modelImports(doc, operations),
+	}
+	if len(doc.Servers) > 0 {
+		data.DefaultServerURL = strings.TrimRight(doc.Servers[0].URL, "/")
 	}
 	for _, route := range operations {
 		params := operationParams(route.Operation)
@@ -202,6 +210,9 @@ func apiSource(doc *openapi.Document) (string, error) {
 		if operation.HasSSE {
 			data.HasSSE = true
 		}
+		if operation.MultipartBody != nil {
+			data.HasMultipartBody = true
+		}
 		data.Operations = append(data.Operations, operation)
 	}
 	return executeTemplate("api.ts", data)
@@ -209,7 +220,9 @@ func apiSource(doc *openapi.Document) (string, error) {
 
 type apiData struct {
 	Imports           []string
+	DefaultServerURL  string
 	HasSSE            bool
+	HasMultipartBody  bool
 	RequestInterfaces []requestInterfaceData
 	Operations        []operationData
 }
@@ -222,6 +235,7 @@ type requestInterfaceData struct {
 type operationData struct {
 	ID                      string
 	Method                  string
+	ServerURL               string
 	Params                  []opParam
 	RequiredParams          []opParam
 	Responses               []opResponse
@@ -235,8 +249,25 @@ type operationData struct {
 	PositionalRequestObject string
 	PathExpression          string
 	BodyParamName           string
+	RawBodyParamName        string
+	RawBodyMediaType        string
+	MultipartBody           *tsMultipartBodyData
 	QueryParams             []opParam
 	HasSSE                  bool
+}
+
+type tsMultipartBodyData struct {
+	MediaType string
+	Parts     []tsMultipartPartData
+}
+
+type tsMultipartPartData struct {
+	Name               string
+	Type               string
+	JSON               bool
+	Binary             bool
+	ContentType        string
+	AllowedContentType string
 }
 
 func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) operationData {
@@ -244,7 +275,7 @@ func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) 
 	params := operationParams(op)
 	responses := operationResponses(doc, route.Method, op)
 	data := operationData{
-		ID:                      op.OperationID,
+		ID:                      openapi.LowerCamel(op.OperationID),
 		Method:                  route.Method,
 		Params:                  params,
 		Responses:               responses,
@@ -257,6 +288,9 @@ func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) 
 		PositionalRequestObject: positionalRequestObject(params),
 		PathExpression:          pathExpression(route.Path, params),
 		HasSSE:                  doc.OperationHasSSEResponseMethod(route.Method, op),
+	}
+	if len(op.Servers) > 0 {
+		data.ServerURL = strings.TrimRight(op.Servers[0].URL, "/")
 	}
 	for _, param := range params {
 		if param.Required {
@@ -272,8 +306,15 @@ func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) 
 		}
 	}
 	if body := bodyParam(params); body != nil {
-		data.BodyParamName = body.Name
+		switch body.Kind {
+		case "body":
+			data.BodyParamName = body.Name
+		case "rawBody":
+			data.RawBodyParamName = body.Name
+			data.RawBodyMediaType, _ = op.RawRequestBodyMediaType()
+		}
 	}
+	data.MultipartBody, _ = sequentialMultipartBody(op)
 	return data
 }
 
@@ -374,7 +415,17 @@ func operationParams(operation *openapi.Operation) []opParam {
 			Slice:    param.Schema != nil && param.Schema.IsArray(),
 		})
 	}
-	if schema := operation.JSONRequestSchema(); schema != nil {
+	if multipartBody, ok := sequentialMultipartBody(operation); ok {
+		for _, part := range multipartBody.Parts {
+			params = append(params, opParam{
+				Name:     part.Name,
+				WireName: part.Name,
+				Type:     part.Type,
+				Required: true,
+				Kind:     "multipart",
+			})
+		}
+	} else if schema := operation.JSONRequestSchema(); schema != nil {
 		name := openapi.LowerCamel(openapi.RefName(schema.Ref))
 		if name == "" {
 			name = "body"
@@ -383,11 +434,91 @@ func operationParams(operation *openapi.Operation) []opParam {
 			Name:     name,
 			WireName: "body",
 			Type:     tsType(schema),
-			Required: true,
+			Required: operation.RequestBody.Required,
+			Optional: optional(operation.RequestBody.Required),
 			Kind:     "body",
+		})
+	} else if _, ok := operation.RawRequestBodyMediaType(); ok {
+		params = append(params, opParam{
+			Name:     "body",
+			WireName: "body",
+			Type:     "BodyInit",
+			Required: operation.RequestBody.Required,
+			Optional: optional(operation.RequestBody.Required),
+			Kind:     "rawBody",
 		})
 	}
 	return params
+}
+
+func validateRequestBody(operation *openapi.Operation) error {
+	if operation.RequestBody == nil {
+		return nil
+	}
+	if media, ok := operation.RequestBody.Content["application/json"]; ok {
+		if media.Schema != nil {
+			return nil
+		}
+		return fmt.Errorf("operation %s has unsupported request body: application/json schema is missing", operation.OperationID)
+	}
+	if _, ok := sequentialMultipartBody(operation); ok {
+		return nil
+	}
+	if mediaType, ok := operation.RawRequestBodyMediaType(); ok && !strings.HasPrefix(mediaType, "multipart/") {
+		return nil
+	}
+	return fmt.Errorf("operation %s has unsupported request body", operation.OperationID)
+}
+
+func sequentialMultipartBody(operation *openapi.Operation) (*tsMultipartBodyData, bool) {
+	if operation.RequestBody == nil {
+		return nil, false
+	}
+	mediaTypes := make([]string, 0, len(operation.RequestBody.Content))
+	for mediaType := range operation.RequestBody.Content {
+		mediaTypes = append(mediaTypes, mediaType)
+	}
+	sort.Strings(mediaTypes)
+	for _, mediaType := range mediaTypes {
+		media := operation.RequestBody.Content[mediaType]
+		if !strings.HasPrefix(mediaType, "multipart/") || media.Schema == nil ||
+			!media.Schema.Type.Has("array") || len(media.Schema.PrefixItems) != 2 ||
+			len(media.PrefixEncoding) != 2 {
+			continue
+		}
+		minimum, maximum := 0, 0
+		if media.Schema.MinItems != nil {
+			minimum = *media.Schema.MinItems
+		}
+		if media.Schema.MaxItems != nil {
+			maximum = *media.Schema.MaxItems
+		}
+		if minimum != 2 || maximum != 2 {
+			continue
+		}
+		body := &tsMultipartBodyData{MediaType: mediaType}
+		for index, schema := range media.Schema.PrefixItems {
+			name := openapi.LowerCamel(schema.Title)
+			if name == "" {
+				name = fmt.Sprintf("part%d", index+1)
+			}
+			part := tsMultipartPartData{
+				Name:        name,
+				ContentType: strings.TrimSpace(media.PrefixEncoding[index].ContentType),
+			}
+			if schema.Type.Has("string") && schema.Format == "binary" {
+				part.Binary = true
+				part.Type = "Blob"
+				part.AllowedContentType = part.ContentType
+			} else {
+				part.JSON = true
+				part.Type = tsType(schema)
+			}
+			body.Parts = append(body.Parts, part)
+		}
+		return body, true
+	}
+	return nil, false
 }
 
 func operationResponses(doc *openapi.Document, method string, operation *openapi.Operation) []opResponse {
@@ -649,7 +780,7 @@ func pathExpression(path string, params []opParam) string {
 
 func bodyParam(params []opParam) *opParam {
 	for _, param := range params {
-		if param.Kind == "body" {
+		if param.Kind == "body" || param.Kind == "rawBody" {
 			return &param
 		}
 	}
