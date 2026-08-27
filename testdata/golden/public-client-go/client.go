@@ -44,7 +44,6 @@ type Option func(*ClientOptions)
 
 type ClientOptions struct {
 	BaseURL                 string
-	UploadBaseURL           string
 	httpClient              HTTPClient
 	requestEditors          []RequestEditorFn
 	responseTimeout         time.Duration
@@ -52,14 +51,6 @@ type ClientOptions struct {
 	sseMaxRetries           int
 	sseReconnectBaseDelay   time.Duration
 	sseReconnectOnStreamEnd bool
-}
-
-// WithUploadBaseURL configures the origin used by generated resumable upload
-// initiation methods. An empty value uses BaseURL.
-func WithUploadBaseURL(baseURL string) Option {
-	return func(options *ClientOptions) {
-		options.UploadBaseURL = baseURL
-	}
 }
 
 // WithHTTPClient replaces the default http.DefaultClient without mutating a
@@ -121,7 +112,7 @@ func WithSSEReconnectOnStreamEnd(reconnect bool) Option {
 
 type Client struct {
 	baseURL                 string
-	uploadBaseURL           string
+	baseURLOverride         bool
 	httpClient              HTTPClient
 	requestEditors          []RequestEditorFn
 	responseTimeout         time.Duration
@@ -132,7 +123,12 @@ type Client struct {
 }
 
 func NewClient(config ClientOptions, options ...Option) (*Client, error) {
-	parsed, err := url.Parse(strings.TrimSpace(config.BaseURL))
+	configuredBaseURL := strings.TrimSpace(config.BaseURL)
+	baseURLOverride := configuredBaseURL != ""
+	if configuredBaseURL == "" {
+		configuredBaseURL = config.BaseURL
+	}
+	parsed, err := url.Parse(configuredBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse base URL %q: %w", config.BaseURL, err)
 	}
@@ -140,16 +136,6 @@ func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 		return nil, fmt.Errorf("base URL %q must include scheme and host", config.BaseURL)
 	}
 	config.httpClient = http.DefaultClient
-	if strings.TrimSpace(config.UploadBaseURL) == "" {
-		config.UploadBaseURL = parsed.String()
-	}
-	uploadParsed, err := url.Parse(strings.TrimSpace(config.UploadBaseURL))
-	if err != nil {
-		return nil, fmt.Errorf("parse upload base URL %q: %w", config.UploadBaseURL, err)
-	}
-	if uploadParsed.Scheme == "" || uploadParsed.Host == "" {
-		return nil, fmt.Errorf("upload base URL %q must include scheme and host", config.UploadBaseURL)
-	}
 	config.responseTimeout = defaultResponseTimeout
 	config.sseIdleTimeout = defaultSSEIdleTimeout
 	config.sseMaxRetries = defaultSSEMaxRetries
@@ -183,7 +169,7 @@ func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 	}
 	return &Client{
 		baseURL:                 strings.TrimRight(parsed.String(), "/"),
-		uploadBaseURL:           strings.TrimRight(uploadParsed.String(), "/"),
+		baseURLOverride:         baseURLOverride,
 		httpClient:              config.httpClient,
 		requestEditors:          append([]RequestEditorFn(nil), config.requestEditors...),
 		responseTimeout:         config.responseTimeout,
@@ -855,6 +841,7 @@ func (c *Client) NewUploadMediaRequest(ctx context.Context, params UploadMediaPa
 		return nil, fmt.Errorf("build UploadMedia request: required parameter uploadType is empty")
 	}
 	path := "/uploads/{owner}"
+
 	if params.Body == nil {
 		return nil, fmt.Errorf("build UploadMedia request: required request body is nil")
 	}
