@@ -195,9 +195,6 @@ func apiSource(doc *openapi.Document) (string, error) {
 	data := apiData{
 		Imports: modelImports(doc, operations),
 	}
-	if len(doc.Servers) > 0 {
-		data.DefaultServerURL = strings.TrimRight(doc.Servers[0].URL, "/")
-	}
 	for _, route := range operations {
 		params := operationParams(route.Operation)
 		if len(params) > 0 {
@@ -220,7 +217,6 @@ func apiSource(doc *openapi.Document) (string, error) {
 
 type apiData struct {
 	Imports           []string
-	DefaultServerURL  string
 	HasSSE            bool
 	HasMultipartBody  bool
 	RequestInterfaces []requestInterfaceData
@@ -235,7 +231,6 @@ type requestInterfaceData struct {
 type operationData struct {
 	ID                      string
 	Method                  string
-	ServerURL               string
 	Params                  []opParam
 	RequiredParams          []opParam
 	Responses               []opResponse
@@ -288,9 +283,6 @@ func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) 
 		PositionalRequestObject: positionalRequestObject(params),
 		PathExpression:          pathExpression(route.Path, params),
 		HasSSE:                  doc.OperationHasSSEResponseMethod(route.Method, op),
-	}
-	if len(op.Servers) > 0 {
-		data.ServerURL = strings.TrimRight(op.Servers[0].URL, "/")
 	}
 	for _, param := range params {
 		if param.Required {

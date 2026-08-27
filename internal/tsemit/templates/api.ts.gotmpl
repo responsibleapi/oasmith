@@ -10,7 +10,7 @@ export type FetchInterceptorChain = {
 };
 
 export type ClientOptions = {
-    baseURL?: string;
+    baseURL: string;
     fetch?: typeof globalThis.fetch;
     interceptors?: FetchInterceptor[];
     responseTimeoutMs?: number;
@@ -537,7 +537,6 @@ async function runInterceptors(
 
 {{end}}export class DefaultApi {
     private baseURL: string;
-    private baseURLOverride: boolean;
     private fetch: typeof globalThis.fetch;
     private interceptors: FetchInterceptor[];
     private responseTimeoutMs: number | undefined;
@@ -548,9 +547,8 @@ async function runInterceptors(
     private sseReconnectOnStreamEnd: boolean;
 {{end}}
 
-    constructor(options: ClientOptions = {}) {
-        this.baseURLOverride = options.baseURL !== undefined;
-        this.baseURL = options.baseURL ?? {{if .DefaultServerURL}}{{printf "%q" .DefaultServerURL}}{{else}}''{{end}};
+    constructor(options: ClientOptions) {
+        this.baseURL = options.baseURL;
         this.fetch = options.fetch ?? globalThis.fetch;
         this.interceptors = options.interceptors ?? [];
         this.responseTimeoutMs = configuredTimeout(
@@ -691,8 +689,7 @@ async function runInterceptors(
 {{end}}            }
         }
 {{end}}{{end}}        const queryString = queryParameters.toString();
-{{end}}        const baseURL = {{if .ServerURL}}this.baseURLOverride ? this.baseURL : {{printf "%q" .ServerURL}}{{else}}this.baseURL{{end}};
-        return new Request(baseURL + {{.PathExpression}}{{if .QueryParams}} + (queryString === '' ? '' : '?' + queryString){{end}}, {
+{{end}}        return new Request(this.baseURL + {{.PathExpression}}{{if .QueryParams}} + (queryString === '' ? '' : '?' + queryString){{end}}, {
             method: '{{.Method}}',
             headers: headerParameters,
 {{if .BodyParamName}}            body: JSON.stringify(requestParameters['{{.BodyParamName}}']),

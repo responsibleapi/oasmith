@@ -341,7 +341,7 @@ paths:
 	}
 }
 
-func TestGoClientGeneratesDeclaredSequentialMultipartAndOperationServer(t *testing.T) {
+func TestGoClientRequiresBaseURLAndGeneratesDeclaredSequentialMultipart(t *testing.T) {
 	t.Parallel()
 
 	doc, err := openapi.Parse([]byte(`openapi: 3.2.0
@@ -403,6 +403,20 @@ components:
 	if err := goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: "ordered.yaml"}); err != nil {
 		t.Fatalf("emit ordered multipart fixture: %v", err)
 	}
+	clientSource, err := os.ReadFile(filepath.Join(outDir, "client.go"))
+	if err != nil {
+		t.Fatalf("read generated ordered multipart client: %v", err)
+	}
+	for _, forbidden := range []string{
+		"baseURLOverride",
+		"DefaultServerURL",
+		"https://api.example.test",
+		"https://upload.example.test",
+	} {
+		if strings.Contains(string(clientSource), forbidden) {
+			t.Fatalf("generated Go client contains %q", forbidden)
+		}
+	}
 	for name, source := range map[string]string{
 		"go.mod":         "module orderedclient\n\ngo 1.27.0\n",
 		"client_test.go": sequentialMultipartBehaviorTest,
@@ -419,7 +433,7 @@ components:
 	}
 }
 
-func TestTypeScriptClientGeneratesDeclaredSequentialMultipartAndServers(t *testing.T) {
+func TestTypeScriptClientRequiresBaseURLAndGeneratesDeclaredSequentialMultipart(t *testing.T) {
 	t.Parallel()
 
 	doc, err := openapi.Parse([]byte(`openapi: 3.2.0
@@ -520,9 +534,17 @@ components:
 	if err != nil {
 		t.Fatalf("read generated TypeScript multipart client: %v", err)
 	}
-	for _, forbidden := range []string{"Content-Range", "resumable", "StatusCode == 308", "Range header"} {
+	for _, forbidden := range []string{
+		"baseURLOverride",
+		"https://youtube.googleapis.com",
+		"https://www.googleapis.com",
+		"Content-Range",
+		"resumable",
+		"StatusCode == 308",
+		"Range header",
+	} {
 		if strings.Contains(string(raw), forbidden) {
-			t.Fatalf("generated TypeScript multipart client invented %q behavior", forbidden)
+			t.Fatalf("generated TypeScript multipart client contains %q", forbidden)
 		}
 	}
 }
@@ -1554,8 +1576,13 @@ import (
 	"testing"
 )
 
-func TestDeclaredServerAndOrderedParts(t *testing.T) {
-	request, err := NewClient(ClientOptions{})
+func TestRequiredBaseURLAndOrderedParts(t *testing.T) {
+	_, err := NewClient(ClientOptions{})
+	if err == nil || !strings.Contains(err.Error(), "base URL must not be empty") {
+		t.Fatalf("missing base URL error = %v", err)
+	}
+
+	request, err := NewClient(ClientOptions{BaseURL: "https://client.example.test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1568,7 +1595,7 @@ func TestDeclaredServerAndOrderedParts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if built.URL.String() != "https://upload.example.test/declared-upload?uploadType=multipart" {
+	if built.URL.String() != "https://client.example.test/declared-upload?uploadType=multipart" {
 		t.Fatalf("request URL = %q", built.URL)
 	}
 	mediaType, parameters, err := mime.ParseMediaType(built.Header.Get("Content-Type"))
@@ -1604,23 +1631,6 @@ func TestDeclaredServerAndOrderedParts(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "uploadType must be multipart") {
 		t.Fatalf("invalid constant error = %v", err)
 	}
-
-	override, err := NewClient(ClientOptions{BaseURL: "https://fixture.example.test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	overridden, err := override.NewUploadMediaRequest(t.Context(), UploadMediaParams{
-		UploadType: "multipart",
-		Metadata: Video{Id: "metadata"},
-		Media: http.NoBody,
-		MediaContentType: "application/octet-stream",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if overridden.URL.Host != "fixture.example.test" {
-		t.Fatalf("override host = %q", overridden.URL.Host)
-	}
 }
 `
 
@@ -1634,15 +1644,18 @@ const request: YoutubeVideosInsertRequest = {
   media: new Blob(['complete-media'], { type: 'video/mp4' }),
 }
 
-new DefaultApi().youtubeVideosInsertRequest(request)
-new DefaultApi().youtubeVideosListRequest()
+new DefaultApi({ baseURL: 'https://client.example.test' }).youtubeVideosInsertRequest(request)
+new DefaultApi({ baseURL: 'https://client.example.test' }).youtubeVideosListRequest()
+
+// @ts-expect-error ClientOptions requires baseURL.
+new DefaultApi()
 `
 
 const typescriptSequentialMultipartBehaviorTest = `
 import { DefaultApi } from './api.ts'
 
-void describe('TypeScript declared multipart and servers', () => {
-  void test('uses declared servers and emits complete ordered parts', async () => {
+void describe('TypeScript required base URL and declared multipart', () => {
+  void test('uses the required base URL and emits complete ordered parts', async () => {
     function boundaryOf(request: Request): string {
       const contentType = request.headers.get('Content-Type') ?? ''
       const match = /^multipart\/related;\s*boundary=(.+)$/.exec(contentType)
@@ -1652,7 +1665,7 @@ void describe('TypeScript declared multipart and servers', () => {
       return match[1]
     }
 
-    const api = new DefaultApi()
+    const api = new DefaultApi({ baseURL: 'https://client.example.test' })
     const request = api.youtubeVideosInsertRequest({
       part: 'snippet,status',
       uploadType: 'multipart',
@@ -1661,7 +1674,7 @@ void describe('TypeScript declared multipart and servers', () => {
     })
     const url = new URL(request.url)
     expect(url.origin + url.pathname).toEqual(
-      'https://www.googleapis.com/upload/youtube/v3/videos',
+      'https://client.example.test/upload/youtube/v3/videos',
     )
     expect(url.searchParams.get('part')).toEqual('snippet,status')
     expect(url.searchParams.get('uploadType')).toEqual('multipart')
@@ -1678,23 +1691,12 @@ void describe('TypeScript declared multipart and servers', () => {
         '--' + boundary + '--\r\n',
     )
     expect(api.youtubeVideosListRequest().url).toEqual(
-      'https://youtube.googleapis.com/youtube/v3/videos',
+      'https://client.example.test/youtube/v3/videos',
     )
   })
 
-  void test('keeps an explicit base URL authoritative', () => {
-    const api = new DefaultApi({ baseURL: 'https://fixture.example.test' })
-    const request = api.youtubeVideosInsertRequest({
-      part: 'snippet',
-      uploadType: 'multipart',
-      metadata: { id: 'metadata' },
-      media: new Blob(['complete-media'], { type: 'application/octet-stream' }),
-    })
-    expect(new URL(request.url).host).toEqual('fixture.example.test')
-  })
-
   void test('rejects undeclared binary part content types', () => {
-    const api = new DefaultApi()
+    const api = new DefaultApi({ baseURL: 'https://client.example.test' })
     expect(() =>
       api.youtubeVideosInsertRequest({
         part: 'snippet',

@@ -10,7 +10,6 @@ import (
 
 type goClientData struct {
 	PackageName      string
-	DefaultServerURL string
 	HasJSONBody      bool
 	HasMultipartBody bool
 	HasSSE           bool
@@ -21,7 +20,6 @@ type goOperationData struct {
 	ID               string
 	Method           string
 	Path             string
-	ServerURL        string
 	HasParams        bool
 	HasQueryParams   bool
 	ParamsType       string
@@ -85,9 +83,6 @@ func goClientTemplateData(doc *openapi.Document, sourcePath string) goClientData
 	data := goClientData{
 		PackageName: packageName(doc, sourcePath),
 	}
-	if len(doc.Servers) > 0 {
-		data.DefaultServerURL = strings.TrimRight(doc.Servers[0].URL, "/")
-	}
 	for _, route := range doc.Operations() {
 		operation := e.operationTemplateData(doc, route)
 		data.HasJSONBody = data.HasJSONBody || operation.HasJSONBody
@@ -109,9 +104,6 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.Ope
 		ParamsType:    openapi.ExportName(op.OperationID) + "Params",
 		ResponsesType: openapi.ExportName(op.OperationID) + "Response",
 		Accept:        operationAccept(doc, route.Method, op),
-	}
-	if len(op.Servers) > 0 {
-		data.ServerURL = strings.TrimRight(op.Servers[0].URL, "/")
 	}
 	for _, param := range op.Parameters {
 		paramType := e.goType(param.Schema)

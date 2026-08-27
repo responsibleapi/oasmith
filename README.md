@@ -49,9 +49,8 @@ When `nubx` is available, OASmith runs its pinned Oxfmt version through
 `nubx`'s local discovery and registry fallback. No Node project or installed
 Oxfmt dependency is required. Generation still works without `nubx`.
 
-Generated clients use the first document-level server by default and the first
-operation-level server for that operation. An explicit client base URL always
-overrides either declaration.
+Generated clients require an explicit client base URL and use it for every
+operation. OpenAPI server declarations do not change the runtime destination.
 
 TypeScript clients emit JSON bodies, raw bodies as `BodyInit`, and fixed-length
 ordered multipart bodies declared with `prefixItems` and `prefixEncoding`.

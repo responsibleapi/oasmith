@@ -112,7 +112,6 @@ func WithSSEReconnectOnStreamEnd(reconnect bool) Option {
 
 type Client struct {
 	baseURL                 string
-	baseURLOverride         bool
 	httpClient              HTTPClient
 	requestEditors          []RequestEditorFn
 	responseTimeout         time.Duration
@@ -124,9 +123,8 @@ type Client struct {
 
 func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 	configuredBaseURL := strings.TrimSpace(config.BaseURL)
-	baseURLOverride := configuredBaseURL != ""
 	if configuredBaseURL == "" {
-		configuredBaseURL = config.BaseURL
+		return nil, fmt.Errorf("base URL must not be empty: %q", config.BaseURL)
 	}
 	parsed, err := url.Parse(configuredBaseURL)
 	if err != nil {
@@ -169,7 +167,6 @@ func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 	}
 	return &Client{
 		baseURL:                 strings.TrimRight(parsed.String(), "/"),
-		baseURLOverride:         baseURLOverride,
 		httpClient:              config.httpClient,
 		requestEditors:          append([]RequestEditorFn(nil), config.requestEditors...),
 		responseTimeout:         config.responseTimeout,
@@ -613,8 +610,7 @@ func (c *Client) NewWatchEventsRequest(ctx context.Context) (*http.Request, erro
 	}
 	path := "/events"
 
-	baseURL := c.baseURL
-	endpoint, err := url.Parse(baseURL + path)
+	endpoint, err := url.Parse(c.baseURL + path)
 	if err != nil {
 		return nil, fmt.Errorf("build WatchEvents URL: %w", err)
 	}
@@ -726,8 +722,7 @@ func (c *Client) NewCreateThingRequest(ctx context.Context, params CreateThingPa
 	path := "/things/{thing_id}"
 
 	path = strings.ReplaceAll(path, "{thing_id}", url.PathEscape(fmt.Sprint(params.ThingId)))
-	baseURL := c.baseURL
-	endpoint, err := url.Parse(baseURL + path)
+	endpoint, err := url.Parse(c.baseURL + path)
 	if err != nil {
 		return nil, fmt.Errorf("build CreateThing URL: %w", err)
 	}
@@ -847,8 +842,7 @@ func (c *Client) NewUploadMediaRequest(ctx context.Context, params UploadMediaPa
 	}
 
 	path = strings.ReplaceAll(path, "{owner}", url.PathEscape(fmt.Sprint(params.Owner)))
-	baseURL := c.baseURL
-	endpoint, err := url.Parse(baseURL + path)
+	endpoint, err := url.Parse(c.baseURL + path)
 	if err != nil {
 		return nil, fmt.Errorf("build UploadMedia URL: %w", err)
 	}

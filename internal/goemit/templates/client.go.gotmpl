@@ -27,8 +27,6 @@ const (
 	defaultSSEMaxRetries = 5
 	defaultSSEReconnectBaseDelay = 200 * time.Millisecond
 	maxSSERetries = 100
-{{if .DefaultServerURL}}	DefaultServerURL = {{printf "%q" .DefaultServerURL}}
-{{end}}
 )
 
 type HTTPClient interface {
@@ -117,7 +115,6 @@ func WithSSEReconnectOnStreamEnd(reconnect bool) Option {
 
 type Client struct {
 	baseURL string
-	baseURLOverride bool
 	httpClient HTTPClient
 	requestEditors []RequestEditorFn
 	responseTimeout time.Duration
@@ -129,9 +126,8 @@ type Client struct {
 
 func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 	configuredBaseURL := strings.TrimSpace(config.BaseURL)
-	baseURLOverride := configuredBaseURL != ""
 	if configuredBaseURL == "" {
-		configuredBaseURL = {{if .DefaultServerURL}}DefaultServerURL{{else}}config.BaseURL{{end}}
+		return nil, fmt.Errorf("base URL must not be empty: %q", config.BaseURL)
 	}
 	parsed, err := url.Parse(configuredBaseURL)
 	if err != nil {
@@ -174,7 +170,6 @@ func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 	}
 	return &Client{
 		baseURL: strings.TrimRight(parsed.String(), "/"),
-		baseURLOverride: baseURLOverride,
 		httpClient: config.httpClient,
 		requestEditors: append([]RequestEditorFn(nil), config.requestEditors...),
 		responseTimeout: config.responseTimeout,
@@ -689,11 +684,7 @@ func (c *Client) New{{.ID}}Request(ctx context.Context{{if .HasParams}}, params 
 	}
 {{end}}
 {{range .Params}}{{if .Path}}	path = strings.ReplaceAll(path, {{printf "%q" (printf "{%s}" .WireName)}}, url.PathEscape(fmt.Sprint({{if not .Required}}*{{end}}params.{{.FieldName}})))
-{{end}}{{end}}	baseURL := c.baseURL
-{{if .ServerURL}}	if !c.baseURLOverride {
-		baseURL = {{printf "%q" .ServerURL}}
-	}
-{{end}}	endpoint, err := url.Parse(baseURL + path)
+{{end}}{{end}}	endpoint, err := url.Parse(c.baseURL + path)
 	if err != nil {
 		return nil, fmt.Errorf("build {{.ID}} URL: %w", err)
 	}
