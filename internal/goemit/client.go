@@ -9,17 +9,19 @@ import (
 )
 
 type goClientData struct {
-	PackageName        string
-	HasJSONBody        bool
-	HasResumableUpload bool
-	HasSSE             bool
-	Operations         []goOperationData
+	PackageName      string
+	DefaultServerURL string
+	HasJSONBody      bool
+	HasMultipartBody bool
+	HasSSE           bool
+	Operations       []goOperationData
 }
 
 type goOperationData struct {
 	ID               string
 	Method           string
 	Path             string
+	ServerURL        string
 	HasParams        bool
 	HasQueryParams   bool
 	ParamsType       string
@@ -33,14 +35,31 @@ type goOperationData struct {
 	HasRawBody       bool
 	RequiredRawBody  bool
 	RawBodyMediaType string
-	ResumableUpload  bool
+	MultipartBody    *goMultipartBodyData
 	ReconnectableSSE bool
+}
+
+type goMultipartBodyData struct {
+	MediaType string
+	Parts     []goMultipartPartData
+}
+
+type goMultipartPartData struct {
+	FieldName          string
+	Type               string
+	JSON               bool
+	Binary             bool
+	ContentType        string
+	ContentTypeField   string
+	AllowedContentType string
 }
 
 type goOperationParamData struct {
 	FieldName string
 	WireName  string
 	Type      string
+	Const     string
+	HasConst  bool
 	Required  bool
 	Path      bool
 	Query     bool
@@ -66,10 +85,13 @@ func goClientTemplateData(doc *openapi.Document, sourcePath string) goClientData
 	data := goClientData{
 		PackageName: packageName(doc, sourcePath),
 	}
+	if len(doc.Servers) > 0 {
+		data.DefaultServerURL = strings.TrimRight(doc.Servers[0].URL, "/")
+	}
 	for _, route := range doc.Operations() {
 		operation := e.operationTemplateData(doc, route)
 		data.HasJSONBody = data.HasJSONBody || operation.HasJSONBody
-		data.HasResumableUpload = data.HasResumableUpload || operation.ResumableUpload
+		data.HasMultipartBody = data.HasMultipartBody || operation.MultipartBody != nil
 		for _, response := range operation.Responses {
 			data.HasSSE = data.HasSSE || response.ReconnectableSSE
 		}
@@ -81,16 +103,22 @@ func goClientTemplateData(doc *openapi.Document, sourcePath string) goClientData
 func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) goOperationData {
 	op := route.Operation
 	data := goOperationData{
-		ID:              openapi.ExportName(op.OperationID),
-		Method:          route.Method,
-		Path:            route.Path,
-		ParamsType:      openapi.ExportName(op.OperationID) + "Params",
-		ResponsesType:   openapi.ExportName(op.OperationID) + "Response",
-		Accept:          operationAccept(doc, route.Method, op),
-		ResumableUpload: op.OperationID == "youtube.videos.insert",
+		ID:            openapi.ExportName(op.OperationID),
+		Method:        route.Method,
+		Path:          route.Path,
+		ParamsType:    openapi.ExportName(op.OperationID) + "Params",
+		ResponsesType: openapi.ExportName(op.OperationID) + "Response",
+		Accept:        operationAccept(doc, route.Method, op),
+	}
+	if len(op.Servers) > 0 {
+		data.ServerURL = strings.TrimRight(op.Servers[0].URL, "/")
 	}
 	for _, param := range op.Parameters {
 		paramType := e.goType(param.Schema)
+		constant, hasConstant := "", false
+		if param.Schema != nil {
+			constant, hasConstant = param.Schema.Const.(string)
+		}
 		if !param.Required {
 			paramType = optionalType(paramType)
 		}
@@ -98,6 +126,8 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.Ope
 			FieldName: openapi.ExportName(param.Name),
 			WireName:  param.Name,
 			Type:      paramType,
+			Const:     constant,
+			HasConst:  hasConstant,
 			Required:  param.Required,
 			Path:      param.In == "path",
 			Query:     param.In == "query",
@@ -107,7 +137,11 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.Ope
 		})
 		data.HasQueryParams = data.HasQueryParams || param.In == "query"
 	}
-	if schema := op.JSONRequestSchema(); schema != nil {
+	if multipartBody, ok := sequentialMultipartBody(e, op); ok {
+		data.MultipartBody = multipartBody
+		data.HasRequestBody = true
+		data.HasParams = true
+	} else if schema := op.JSONRequestSchema(); schema != nil {
 		paramType := e.goType(schema)
 		required := op.RequestBody != nil && op.RequestBody.Required
 		if !required {
@@ -130,11 +164,66 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.Ope
 		data.HasRequestBody = true
 	}
 	data.HasParams = len(data.Params) > 0 || data.HasRawBody
+	if data.MultipartBody != nil {
+		data.HasParams = true
+	}
 	data.Responses = e.operationResponses(doc, route.Method, op)
 	for _, response := range data.Responses {
 		data.ReconnectableSSE = data.ReconnectableSSE || response.ReconnectableSSE
 	}
 	return data
+}
+
+func sequentialMultipartBody(e *emitter, operation *openapi.Operation) (*goMultipartBodyData, bool) {
+	if operation.RequestBody == nil {
+		return nil, false
+	}
+	mediaTypes := make([]string, 0, len(operation.RequestBody.Content))
+	for mediaType := range operation.RequestBody.Content {
+		mediaTypes = append(mediaTypes, mediaType)
+	}
+	sort.Strings(mediaTypes)
+	for _, mediaType := range mediaTypes {
+		media := operation.RequestBody.Content[mediaType]
+		if !strings.HasPrefix(mediaType, "multipart/") || media.Schema == nil ||
+			!media.Schema.Type.Has("array") || len(media.Schema.PrefixItems) != 2 ||
+			len(media.PrefixEncoding) != 2 {
+			continue
+		}
+		minimum, maximum := 0, 0
+		if media.Schema.MinItems != nil {
+			minimum = *media.Schema.MinItems
+		}
+		if media.Schema.MaxItems != nil {
+			maximum = *media.Schema.MaxItems
+		}
+		if minimum != 2 || maximum != 2 {
+			continue
+		}
+		body := &goMultipartBodyData{MediaType: mediaType}
+		for index, schema := range media.Schema.PrefixItems {
+			fieldName := openapi.ExportName(schema.Title)
+			if fieldName == "" {
+				fieldName = fmt.Sprintf("Part%d", index+1)
+			}
+			part := goMultipartPartData{
+				FieldName:   fieldName,
+				ContentType: strings.TrimSpace(media.PrefixEncoding[index].ContentType),
+			}
+			if schema.Type.Has("string") && schema.Format == "binary" {
+				part.Binary = true
+				part.Type = "io.Reader"
+				part.ContentTypeField = fieldName + "ContentType"
+				part.AllowedContentType = part.ContentType
+			} else {
+				part.JSON = true
+				part.Type = e.goType(schema)
+			}
+			body.Parts = append(body.Parts, part)
+		}
+		return body, true
+	}
+	return nil, false
 }
 
 func schemaIsString(doc *openapi.Document, schema *openapi.Schema) bool {

@@ -2,14 +2,17 @@
 
 import (
 	"bufio"
-{{if .HasJSONBody}}	"bytes"
+{{if or .HasJSONBody .HasMultipartBody}}	"bytes"
 {{end}}	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-{{if .HasSSE}}	"math/rand"
+{{if .HasMultipartBody}}	"mime"
+	"mime/multipart"
+{{end}}{{if .HasSSE}}	"math/rand"
 {{end}}	"net/http"
-	"net/url"
+{{if .HasMultipartBody}}	"net/textproto"
+{{end}}	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +27,8 @@ const (
 	defaultSSEMaxRetries = 5
 	defaultSSEReconnectBaseDelay = 200 * time.Millisecond
 	maxSSERetries = 100
+{{if .DefaultServerURL}}	DefaultServerURL = {{printf "%q" .DefaultServerURL}}
+{{end}}
 )
 
 type HTTPClient interface {
@@ -44,7 +49,6 @@ type Option func(*ClientOptions)
 
 type ClientOptions struct {
 	BaseURL string
-	UploadBaseURL string
 	httpClient HTTPClient
 	requestEditors []RequestEditorFn
 	responseTimeout time.Duration
@@ -52,14 +56,6 @@ type ClientOptions struct {
 	sseMaxRetries int
 	sseReconnectBaseDelay time.Duration
 	sseReconnectOnStreamEnd bool
-}
-
-// WithUploadBaseURL configures the origin used by generated resumable upload
-// initiation methods. An empty value uses BaseURL.
-func WithUploadBaseURL(baseURL string) Option {
-	return func(options *ClientOptions) {
-		options.UploadBaseURL = baseURL
-	}
 }
 
 // WithHTTPClient replaces the default http.DefaultClient without mutating a
@@ -121,7 +117,7 @@ func WithSSEReconnectOnStreamEnd(reconnect bool) Option {
 
 type Client struct {
 	baseURL string
-	uploadBaseURL string
+	baseURLOverride bool
 	httpClient HTTPClient
 	requestEditors []RequestEditorFn
 	responseTimeout time.Duration
@@ -132,7 +128,12 @@ type Client struct {
 }
 
 func NewClient(config ClientOptions, options ...Option) (*Client, error) {
-	parsed, err := url.Parse(strings.TrimSpace(config.BaseURL))
+	configuredBaseURL := strings.TrimSpace(config.BaseURL)
+	baseURLOverride := configuredBaseURL != ""
+	if configuredBaseURL == "" {
+		configuredBaseURL = {{if .DefaultServerURL}}DefaultServerURL{{else}}config.BaseURL{{end}}
+	}
+	parsed, err := url.Parse(configuredBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse base URL %q: %w", config.BaseURL, err)
 	}
@@ -140,16 +141,6 @@ func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 		return nil, fmt.Errorf("base URL %q must include scheme and host", config.BaseURL)
 	}
 	config.httpClient = http.DefaultClient
-	if strings.TrimSpace(config.UploadBaseURL) == "" {
-		config.UploadBaseURL = parsed.String()
-	}
-	uploadParsed, err := url.Parse(strings.TrimSpace(config.UploadBaseURL))
-	if err != nil {
-		return nil, fmt.Errorf("parse upload base URL %q: %w", config.UploadBaseURL, err)
-	}
-	if uploadParsed.Scheme == "" || uploadParsed.Host == "" {
-		return nil, fmt.Errorf("upload base URL %q must include scheme and host", config.UploadBaseURL)
-	}
 	config.responseTimeout = defaultResponseTimeout
 	config.sseIdleTimeout = defaultSSEIdleTimeout
 	config.sseMaxRetries = defaultSSEMaxRetries
@@ -183,7 +174,7 @@ func NewClient(config ClientOptions, options ...Option) (*Client, error) {
 	}
 	return &Client{
 		baseURL: strings.TrimRight(parsed.String(), "/"),
-		uploadBaseURL: strings.TrimRight(uploadParsed.String(), "/"),
+		baseURLOverride: baseURLOverride,
 		httpClient: config.httpClient,
 		requestEditors: append([]RequestEditorFn(nil), config.requestEditors...),
 		responseTimeout: config.responseTimeout,
@@ -615,11 +606,57 @@ func sseRetryValue(frame []byte) (time.Duration, bool) {
 	return 0, false
 }
 
+{{end}}{{if .HasMultipartBody}}func multipartContentTypeAllowed(value string, allowedValues string) bool {
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(value))
+	if err != nil {
+		return false
+	}
+	for _, allowedValue := range strings.Split(allowedValues, ",") {
+		allowedType, _, parseErr := mime.ParseMediaType(strings.TrimSpace(allowedValue))
+		if parseErr != nil {
+			continue
+		}
+		allowedMajor, allowedMinor, found := strings.Cut(allowedType, "/")
+		major, minor, valueFound := strings.Cut(mediaType, "/")
+		if found && valueFound && major == allowedMajor && (allowedMinor == "*" || minor == allowedMinor) {
+			return true
+		}
+	}
+	return false
+}
+
 {{end}}{{range .Operations}}{{$operation := .}}{{if .HasParams}}type {{.ParamsType}} struct {
 {{range .Params}}	{{.FieldName}} {{.Type}}
 {{end}}{{if .HasRawBody}}	Body io.Reader
 	ContentType string
+{{end}}{{with .MultipartBody}}{{range .Parts}}	{{.FieldName}} {{.Type}}
+{{if .Binary}}	{{.ContentTypeField}} string
+{{end}}{{end}}
 {{end}}}
+
+{{with .MultipartBody}}func new{{$operation.ID}}MultipartBody(params {{$operation.ParamsType}}) (io.Reader, string, error) {
+	var prefix bytes.Buffer
+	writer := multipart.NewWriter(&prefix)
+{{range .Parts}}{{if .Binary}}	media := params.{{.FieldName}}
+{{end}}{{end}}{{range .Parts}}	{
+		header := make(textproto.MIMEHeader)
+{{if .Binary}}	header.Set("Content-Type", strings.TrimSpace(params.{{.ContentTypeField}}))
+{{else}}	header.Set("Content-Type", {{printf "%q" .ContentType}})
+{{end}}		part, err := writer.CreatePart(header)
+		if err != nil {
+			return nil, "", fmt.Errorf("create {{.FieldName}} part: %w", err)
+		}
+{{if .JSON}}		if err := json.NewEncoder(part).Encode(params.{{.FieldName}}); err != nil {
+			return nil, "", fmt.Errorf("encode {{.FieldName}} part: %w", err)
+		}
+{{else}}		_ = part
+{{end}}	}
+{{end}}	contentType := mime.FormatMediaType({{printf "%q" .MediaType}}, map[string]string{"boundary": writer.Boundary()})
+	suffix := strings.NewReader("\r\n--" + writer.Boundary() + "--\r\n")
+	return io.MultiReader(bytes.NewReader(prefix.Bytes()), media, suffix), contentType, nil
+}
+
+{{end}}
 
 {{end}}type {{.ResponsesType}} struct {
 	StatusCode int
@@ -636,16 +673,25 @@ func (c *Client) New{{.ID}}Request(ctx context.Context{{if .HasParams}}, params 
 {{range .Params}}{{if .NonEmpty}}	if params.{{.FieldName}} == "" {
 		return nil, fmt.Errorf("build {{$operation.ID}} request: required parameter {{.WireName}} is empty")
 	}
+{{end}}{{if .HasConst}}	if fmt.Sprint(params.{{.FieldName}}) != {{printf "%q" .Const}} {
+		return nil, fmt.Errorf("build {{$operation.ID}} request: parameter {{.WireName}} must be {{.Const}}")
+	}
 {{end}}{{end}}	path := {{printf "%q" .Path}}
+{{with .MultipartBody}}{{range .Parts}}{{if .Binary}}	if params.{{.FieldName}} == nil {
+		return nil, fmt.Errorf("build {{$operation.ID}} request: required multipart part {{.FieldName}} is nil")
+	}
+	if !multipartContentTypeAllowed(params.{{.ContentTypeField}}, {{printf "%q" .AllowedContentType}}) {
+		return nil, fmt.Errorf("build {{$operation.ID}} request: multipart part {{.FieldName}} content type %q is not allowed", params.{{.ContentTypeField}})
+	}
+{{end}}{{end}}{{end}}
 {{if and .HasRawBody .RequiredRawBody}}	if params.Body == nil {
 		return nil, fmt.Errorf("build {{.ID}} request: required request body is nil")
 	}
 {{end}}
 {{range .Params}}{{if .Path}}	path = strings.ReplaceAll(path, {{printf "%q" (printf "{%s}" .WireName)}}, url.PathEscape(fmt.Sprint({{if not .Required}}*{{end}}params.{{.FieldName}})))
 {{end}}{{end}}	baseURL := c.baseURL
-{{if .ResumableUpload}}	if params.UploadType != nil && *params.UploadType == "resumable" {
-		baseURL = c.uploadBaseURL
-		path = "/upload/youtube/v3/videos"
+{{if .ServerURL}}	if !c.baseURLOverride {
+		baseURL = {{printf "%q" .ServerURL}}
 	}
 {{end}}	endpoint, err := url.Parse(baseURL + path)
 	if err != nil {
@@ -663,7 +709,11 @@ func (c *Client) New{{.ID}}Request(ctx context.Context{{if .HasParams}}, params 
 {{else}}		query.Set({{printf "%q" .WireName}}, fmt.Sprint(*params.{{.FieldName}}))
 {{end}}	}
 {{end}}{{end}}{{end}}	endpoint.RawQuery = query.Encode()
-{{end}}{{if .HasJSONBody}}	var requestBody io.Reader
+{{end}}{{if .MultipartBody}}	requestBody, contentType, err := new{{.ID}}MultipartBody(params)
+	if err != nil {
+		return nil, fmt.Errorf("build {{.ID}} multipart body: %w", err)
+	}
+{{else if .HasJSONBody}}	var requestBody io.Reader
 {{range .Params}}{{if .Body}}{{if .Required}}	encodedBody, err := json.Marshal(params.{{.FieldName}})
 	if err != nil {
 		return nil, fmt.Errorf("encode {{$operation.ID}} JSON body: %w", err)
@@ -685,6 +735,7 @@ func (c *Client) New{{.ID}}Request(ctx context.Context{{if .HasParams}}, params 
 {{if .HasJSONBody}}	if requestBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+{{else if .MultipartBody}}	req.Header.Set("Content-Type", contentType)
 {{else if .HasRawBody}}	if requestBody != nil {
 		contentType := strings.TrimSpace(params.ContentType)
 		if contentType == "" {
@@ -817,181 +868,6 @@ func (c *Client) {{.ID}}(ctx context.Context{{if .HasParams}}, params {{.ParamsT
 			Body: strings.TrimSpace(string(rawBody)),
 		}
 	}
-}
-
-{{end}}{{if .HasResumableUpload}}// YoutubeVideosInsertResumableStart initiates a resumable upload and returns
-// the provider session URL without treating the intentionally empty response as JSON.
-func (c *Client) YoutubeVideosInsertResumableStart(
-	ctx context.Context,
-	metadata *Video,
-	mediaContentType string,
-	mediaContentLength int64,
-	notifySubscribers bool,
-) (string, error) {
-	if metadata == nil || strings.TrimSpace(mediaContentType) == "" || mediaContentLength <= 0 {
-		return "", fmt.Errorf("initiate YoutubeVideosInsert resumable upload: metadata, media content type, and positive media content length are required")
-	}
-	encoded, err := json.Marshal(metadata)
-	if err != nil {
-		return "", fmt.Errorf("encode YoutubeVideosInsert resumable metadata: %w", err)
-	}
-	uploadType := "resumable"
-	request, err := c.NewYoutubeVideosInsertRequest(ctx, YoutubeVideosInsertParams{
-		Part: []string{"snippet", "status"},
-		NotifySubscribers: &notifySubscribers,
-		UploadType: &uploadType,
-		Body: bytes.NewReader(encoded),
-		ContentType: "application/json",
-	})
-	if err != nil {
-		return "", err
-	}
-	request.Header.Set("X-Upload-Content-Type", strings.TrimSpace(mediaContentType))
-	request.Header.Set("X-Upload-Content-Length", fmt.Sprint(mediaContentLength))
-	response, err := c.do(ctx, request)
-	if err != nil {
-		return "", fmt.Errorf("execute YoutubeVideosInsert resumable initiation: %w", err)
-	}
-	if response == nil {
-		return "", fmt.Errorf("execute YoutubeVideosInsert resumable initiation: HTTP client returned nil response")
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
-		rawBody, readErr := io.ReadAll(io.LimitReader(response.Body, maxDiagnosticBodyBytes))
-		if readErr != nil {
-			return "", fmt.Errorf("read unexpected resumable initiation response status %d: %w", response.StatusCode, readErr)
-		}
-		return "", &UnexpectedStatusError{Method: request.Method, URL: request.URL.String(), StatusCode: response.StatusCode, Body: strings.TrimSpace(string(rawBody))}
-	}
-	sessionURL := strings.TrimSpace(response.Header.Get("Location"))
-	if sessionURL == "" {
-		return "", fmt.Errorf("YoutubeVideosInsert resumable initiation returned no Location header")
-	}
-	return sessionURL, nil
-}
-
-// YoutubeVideosInsertResumableStatus queries a persisted resumable session.
-// A completed session returns its original video response; an incomplete
-// session returns the next byte offset to upload.
-func (c *Client) YoutubeVideosInsertResumableStatus(
-	ctx context.Context,
-	sessionURL string,
-	totalLength int64,
-) (*Video, int64, error) {
-	if ctx == nil || totalLength <= 0 {
-		return nil, 0, fmt.Errorf("query YoutubeVideosInsert resumable status: context and positive total length are required")
-	}
-	parsed, err := url.Parse(strings.TrimSpace(sessionURL))
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return nil, 0, fmt.Errorf("query YoutubeVideosInsert resumable status: invalid session URL %q", sessionURL)
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPut, parsed.String(), http.NoBody)
-	if err != nil {
-		return nil, 0, fmt.Errorf("build YoutubeVideosInsert resumable status request: %w", err)
-	}
-	request.ContentLength = 0
-	request.Header.Set("Content-Range", fmt.Sprintf("bytes */%d", totalLength))
-	response, err := c.do(ctx, request)
-	if err != nil {
-		return nil, 0, fmt.Errorf("execute YoutubeVideosInsert resumable status request: %w", err)
-	}
-	if response == nil {
-		return nil, 0, fmt.Errorf("execute YoutubeVideosInsert resumable status request: HTTP client returned nil response")
-	}
-	defer response.Body.Close()
-	if response.StatusCode == 308 {
-		rangeHeader := strings.TrimSpace(response.Header.Get("Range"))
-		if rangeHeader == "" {
-			return nil, 0, nil
-		}
-		var lastByte int64
-		if _, err := fmt.Sscanf(rangeHeader, "bytes=0-%d", &lastByte); err != nil || lastByte < 0 || lastByte >= totalLength {
-			return nil, 0, fmt.Errorf("query YoutubeVideosInsert resumable status: invalid Range header %q", rangeHeader)
-		}
-		return nil, lastByte + 1, nil
-	}
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
-		rawBody, readErr := io.ReadAll(io.LimitReader(response.Body, maxDiagnosticBodyBytes))
-		if readErr != nil {
-			return nil, 0, fmt.Errorf("read unexpected resumable status response status %d: %w", response.StatusCode, readErr)
-		}
-		return nil, 0, &UnexpectedStatusError{Method: request.Method, URL: request.URL.String(), StatusCode: response.StatusCode, Body: strings.TrimSpace(string(rawBody))}
-	}
-	var video Video
-	if err := json.NewDecoder(io.LimitReader(response.Body, maxDecodedBodyBytes)).Decode(&video); err != nil {
-		return nil, 0, fmt.Errorf("decode YoutubeVideosInsert resumable status response: %w", err)
-	}
-	return &video, totalLength, nil
-}
-
-// YoutubeVideosInsertResumableMedia uploads media to a resumable session URL
-// returned by YoutubeVideosInsert. It uses the same editors and HTTP transport,
-// preserving authentication and OpenTelemetry propagation.
-func (c *Client) YoutubeVideosInsertResumableMedia(
-	ctx context.Context,
-	sessionURL string,
-	body io.Reader,
-	contentType string,
-	contentLength int64,
-) (*Video, error) {
-	return c.YoutubeVideosInsertResumableMediaFrom(
-		ctx, sessionURL, body, contentType, contentLength, contentLength, 0,
-	)
-}
-
-// YoutubeVideosInsertResumableMediaFrom resumes an incomplete upload from the
-// exact byte offset returned by YoutubeVideosInsertResumableStatus.
-func (c *Client) YoutubeVideosInsertResumableMediaFrom(
-	ctx context.Context,
-	sessionURL string,
-	body io.Reader,
-	contentType string,
-	contentLength int64,
-	totalLength int64,
-	offset int64,
-) (*Video, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf("upload YoutubeVideosInsert resumable media: context must not be nil")
-	}
-	if body == nil || contentLength <= 0 || totalLength <= 0 || offset < 0 || offset + contentLength != totalLength {
-		return nil, fmt.Errorf("upload YoutubeVideosInsert resumable media: body, valid lengths, and a contiguous offset are required")
-	}
-	parsed, err := url.Parse(strings.TrimSpace(sessionURL))
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return nil, fmt.Errorf("upload YoutubeVideosInsert resumable media: invalid session URL %q", sessionURL)
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPut, parsed.String(), body)
-	if err != nil {
-		return nil, fmt.Errorf("build YoutubeVideosInsert resumable media request: %w", err)
-	}
-	request.ContentLength = contentLength
-	request.Header.Set("Content-Type", strings.TrimSpace(contentType))
-	request.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", offset, totalLength-1, totalLength))
-	response, err := c.do(ctx, request)
-	if err != nil {
-		return nil, fmt.Errorf("execute YoutubeVideosInsert resumable media request: %w", err)
-	}
-	if response == nil {
-		return nil, fmt.Errorf("execute YoutubeVideosInsert resumable media request: HTTP client returned nil response")
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
-		rawBody, readErr := io.ReadAll(io.LimitReader(response.Body, maxDiagnosticBodyBytes))
-		if readErr != nil {
-			return nil, fmt.Errorf("read unexpected resumable media response status %d: %w", response.StatusCode, readErr)
-		}
-		return nil, &UnexpectedStatusError{
-			Method: request.Method,
-			URL: request.URL.String(),
-			StatusCode: response.StatusCode,
-			Body: strings.TrimSpace(string(rawBody)),
-		}
-	}
-	var video Video
-	if err := json.NewDecoder(io.LimitReader(response.Body, maxDecodedBodyBytes)).Decode(&video); err != nil {
-		return nil, fmt.Errorf("decode YoutubeVideosInsert resumable media response: %w", err)
-	}
-	return &video, nil
 }
 
 {{end}}type SSEIdleTimeoutError struct {

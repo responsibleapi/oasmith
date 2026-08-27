@@ -155,7 +155,7 @@ func TestTypeScriptAPIInterceptors(t *testing.T) {
 	if err := os.WriteFile(testPath, []byte(apiBehaviorTest), 0o644); err != nil {
 		t.Fatalf("write api test: %v", err)
 	}
-	cmd := exec.Command("nubx", "-y", "vitest@4.1.10", "run", "--globals", "--root", outDir, "api.test.ts")
+	cmd := exec.Command("nubx", "-y", "vitest@4.0.18", "run", "--globals", "--root", outDir, "api.test.ts")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("typescript api test failed: %v\n%s", err, string(output))
@@ -192,7 +192,7 @@ func TestTypeScriptClientQueries(t *testing.T) {
 	if err := os.WriteFile(testPath, []byte(typescriptQueryBehaviorTest), 0o644); err != nil {
 		t.Fatalf("write TypeScript query test: %v", err)
 	}
-	cmd := exec.Command("nubx", "-y", "vitest@4.1.10", "run", "--globals", "--root", outDir, "query.test.ts")
+	cmd := exec.Command("nubx", "-y", "vitest@4.0.18", "run", "--globals", "--root", outDir, "query.test.ts")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("typescript query test failed: %v\n%s", err, string(output))
@@ -241,6 +241,171 @@ func TestGoPackageNameFallsBackToSourceBasename(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(raw), "package youtube\n") {
 		t.Fatalf("models package declaration = %q, want youtube", strings.SplitN(string(raw), "\n", 2)[0])
+	}
+}
+
+func TestOperationIDCannotInventWireBehavior(t *testing.T) {
+	t.Parallel()
+
+	doc, err := openapi.Parse([]byte(`openapi: 3.2.0
+info:
+  title: Operation identity fixture
+  version: "1"
+paths:
+  /declared-upload:
+    post:
+      operationId: youtube.videos.insert
+      requestBody:
+        required: true
+        content:
+          application/octet-stream: {}
+      responses:
+        "204":
+          description: Accepted
+`))
+	if err != nil {
+		t.Fatalf("parse operation identity fixture: %v", err)
+	}
+	outDir := t.TempDir()
+	if err := goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: "identity.yaml"}); err != nil {
+		t.Fatalf("emit operation identity fixture: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(outDir, "client.go"))
+	if err != nil {
+		t.Fatalf("read generated operation identity client: %v", err)
+	}
+	source := string(raw)
+	if !strings.Contains(source, `path := "/declared-upload"`) {
+		t.Fatalf("generated client omitted declared path:\n%s", source)
+	}
+	for _, forbidden := range []string{
+		"/upload/youtube/v3/videos",
+		"UploadBaseURL",
+		"Resumable",
+		"Content-Range",
+		"Range header",
+		"StatusCode == 308",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("operationId invented %q behavior:\n%s", forbidden, source)
+		}
+	}
+}
+
+func TestTypeScriptOperationIDCannotInventWireBehavior(t *testing.T) {
+	t.Parallel()
+
+	for _, operationID := range []string{"uploadMedia", "youtubeVideosInsert"} {
+		doc, err := openapi.Parse([]byte(strings.ReplaceAll(`openapi: 3.2.0
+info:
+  title: TypeScript operation identity fixture
+  version: "1"
+paths:
+  /declared-upload:
+    post:
+      operationId: OPERATION_ID
+      responses:
+        "204":
+          description: Accepted
+`, "OPERATION_ID", operationID)))
+		if err != nil {
+			t.Fatalf("parse %s fixture: %v", operationID, err)
+		}
+		outDir := t.TempDir()
+		if err := tsemit.Emit(doc, tsemit.Options{OutDir: outDir}); err != nil {
+			t.Fatalf("emit %s fixture: %v", operationID, err)
+		}
+		raw, err := os.ReadFile(filepath.Join(outDir, "api.ts"))
+		if err != nil {
+			t.Fatalf("read %s generated API: %v", operationID, err)
+		}
+		source := string(raw)
+		if !strings.Contains(source, `"/declared-upload"`) {
+			t.Fatalf("%s omitted declared path:\n%s", operationID, source)
+		}
+		for _, forbidden := range []string{"/upload/youtube/v3/videos", "Content-Range", "resumable"} {
+			if strings.Contains(source, forbidden) {
+				t.Fatalf("%s invented %q behavior:\n%s", operationID, forbidden, source)
+			}
+		}
+	}
+}
+
+func TestGoClientGeneratesDeclaredSequentialMultipartAndOperationServer(t *testing.T) {
+	t.Parallel()
+
+	doc, err := openapi.Parse([]byte(`openapi: 3.2.0
+info:
+  title: Ordered upload fixture
+  version: "1"
+servers:
+  - url: https://api.example.test
+paths:
+  /declared-upload:
+    post:
+      operationId: uploadMedia
+      servers:
+        - url: https://upload.example.test
+      parameters:
+        - name: uploadType
+          in: query
+          required: true
+          schema:
+            type: string
+            const: multipart
+      requestBody:
+        required: true
+        content:
+          multipart/related:
+            schema:
+              type: array
+              minItems: 2
+              maxItems: 2
+              prefixItems:
+                - title: metadata
+                  $ref: "#/components/schemas/Video"
+                - title: media
+                  type: string
+                  format: binary
+            prefixEncoding:
+              - contentType: application/json
+              - contentType: video/*,application/octet-stream
+      responses:
+        "201":
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Video"
+components:
+  schemas:
+    Video:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+`))
+	if err != nil {
+		t.Fatalf("parse ordered multipart fixture: %v", err)
+	}
+	outDir := t.TempDir()
+	if err := goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: "ordered.yaml"}); err != nil {
+		t.Fatalf("emit ordered multipart fixture: %v", err)
+	}
+	for name, source := range map[string]string{
+		"go.mod":         "module orderedclient\n\ngo 1.27.0\n",
+		"client_test.go": sequentialMultipartBehaviorTest,
+	} {
+		if err := os.WriteFile(filepath.Join(outDir, name), []byte(source), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	cmd := exec.Command("go", "test", "./...")
+	cmd.Dir = outDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated ordered multipart client test failed: %v\n%s", err, output)
 	}
 }
 
@@ -1215,4 +1380,86 @@ func TestCallerContextRemainsAuthoritative(t *testing.T) {
 	}
 }
 
+`
+
+const sequentialMultipartBehaviorTest = `package ordered
+
+import (
+	"encoding/json"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+func TestDeclaredServerAndOrderedParts(t *testing.T) {
+	request, err := NewClient(ClientOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	built, err := request.NewUploadMediaRequest(t.Context(), UploadMediaParams{
+		UploadType: "multipart",
+		Metadata: Video{Id: "metadata"},
+		Media: strings.NewReader("complete-media"),
+		MediaContentType: "video/mp4",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if built.URL.String() != "https://upload.example.test/declared-upload?uploadType=multipart" {
+		t.Fatalf("request URL = %q", built.URL)
+	}
+	mediaType, parameters, err := mime.ParseMediaType(built.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/related" || parameters["boundary"] == "" {
+		t.Fatalf("content type = %q, %v", built.Header.Get("Content-Type"), err)
+	}
+	reader := multipart.NewReader(built.Body, parameters["boundary"])
+	metadataPart, err := reader.NextPart()
+	if err != nil || metadataPart.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("metadata part = %#v, %v", metadataPart, err)
+	}
+	var metadata Video
+	if err := json.NewDecoder(metadataPart).Decode(&metadata); err != nil || metadata.Id != "metadata" {
+		t.Fatalf("metadata = %#v, %v", metadata, err)
+	}
+	mediaPart, err := reader.NextPart()
+	if err != nil || mediaPart.Header.Get("Content-Type") != "video/mp4" {
+		t.Fatalf("media part = %#v, %v", mediaPart, err)
+	}
+	mediaBody, err := io.ReadAll(mediaPart)
+	if err != nil || string(mediaBody) != "complete-media" {
+		t.Fatalf("media = %q, %v", mediaBody, err)
+	}
+	if _, err := reader.NextPart(); err != io.EOF {
+		t.Fatalf("extra multipart part: %v", err)
+	}
+	_, err = request.NewUploadMediaRequest(t.Context(), UploadMediaParams{
+		UploadType: "resumable",
+		Metadata: Video{Id: "metadata"},
+		Media: http.NoBody,
+		MediaContentType: "video/mp4",
+	})
+	if err == nil || !strings.Contains(err.Error(), "uploadType must be multipart") {
+		t.Fatalf("invalid constant error = %v", err)
+	}
+
+	override, err := NewClient(ClientOptions{BaseURL: "https://fixture.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	overridden, err := override.NewUploadMediaRequest(t.Context(), UploadMediaParams{
+		UploadType: "multipart",
+		Metadata: Video{Id: "metadata"},
+		Media: http.NoBody,
+		MediaContentType: "application/octet-stream",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overridden.URL.Host != "fixture.example.test" {
+		t.Fatalf("override host = %q", overridden.URL.Host)
+	}
+}
 `

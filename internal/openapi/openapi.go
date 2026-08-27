@@ -14,8 +14,14 @@ import (
 type Document struct {
 	OpenAPI    string              `yaml:"openapi"`
 	Info       Info                `yaml:"info"`
+	Servers    []Server            `yaml:"servers"`
 	Paths      map[string]PathItem `yaml:"paths"`
 	Components Components          `yaml:"components"`
+}
+
+// Server describes one OpenAPI server URL.
+type Server struct {
+	URL string `yaml:"url"`
 }
 
 // Info describes OpenAPI document metadata.
@@ -53,6 +59,7 @@ type PathItem struct {
 type Operation struct {
 	OperationID string                `yaml:"operationId"`
 	Deprecated  bool                  `yaml:"deprecated"`
+	Servers     []Server              `yaml:"servers"`
 	Parameters  []Parameter           `yaml:"parameters"`
 	RequestBody *RequestBody          `yaml:"requestBody"`
 	Responses   map[string]Response   `yaml:"responses"`
@@ -83,13 +90,20 @@ type Response struct {
 
 // MediaType describes schema metadata for a response or request media type.
 type MediaType struct {
-	Schema     *Schema `yaml:"schema"`
-	ItemSchema *Schema `yaml:"itemSchema"`
+	Schema         *Schema    `yaml:"schema"`
+	ItemSchema     *Schema    `yaml:"itemSchema"`
+	PrefixEncoding []Encoding `yaml:"prefixEncoding"`
+}
+
+// Encoding describes the wire encoding for one multipart position.
+type Encoding struct {
+	ContentType string `yaml:"contentType"`
 }
 
 // Schema describes the OpenAPI schema subset supported by the generator.
 type Schema struct {
 	Ref              string             `yaml:"$ref"`
+	Title            string             `yaml:"title"`
 	Type             Type               `yaml:"type"`
 	Format           string             `yaml:"format"`
 	Description      string             `yaml:"description"`
@@ -98,6 +112,9 @@ type Schema struct {
 	Properties       map[string]*Schema `yaml:"properties"`
 	Required         []string           `yaml:"required"`
 	Items            *Schema            `yaml:"items"`
+	PrefixItems      []*Schema          `yaml:"prefixItems"`
+	MinItems         *int               `yaml:"minItems"`
+	MaxItems         *int               `yaml:"maxItems"`
 	OneOf            []*Schema          `yaml:"oneOf"`
 	Discriminator    *Discriminator     `yaml:"discriminator"`
 	ContentMediaType string             `yaml:"contentMediaType"`
