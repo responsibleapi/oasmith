@@ -122,11 +122,13 @@ async function runInterceptors(
 
 export class DefaultApi {
   private baseURL: string
+  private baseURLOverride: boolean
   private fetch: typeof globalThis.fetch
   private interceptors: FetchInterceptor[]
   private responseTimeoutMs: number | undefined
 
   constructor(options: ClientOptions = {}) {
+    this.baseURLOverride = options.baseURL !== undefined
     this.baseURL = options.baseURL ?? ""
     this.fetch = options.fetch ?? globalThis.fetch
     this.interceptors = options.interceptors ?? []
