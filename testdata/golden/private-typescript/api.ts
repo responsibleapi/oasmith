@@ -37,6 +37,7 @@ import type {
   UpdateShow,
   UploadSessionID,
   User,
+  ValidationErr,
 } from "./types.ts"
 
 export type FetchInterceptor = (
@@ -577,31 +578,31 @@ async function runInterceptors(
 }
 
 export interface VerifyEmailRequest {
-  emailVerification: EmailVerification
+  body: EmailVerification
 }
 
 export interface CreateGoogleSignupSessionRequest {
-  googleSignup: GoogleSignup
+  body: GoogleSignup
 }
 
 export interface CreatePasswordLoginSessionRequest {
-  passwordAuth: PasswordAuth
+  body: PasswordAuth
 }
 
 export interface ConfirmPasswordResetRequest {
-  passwordResetConfirmation: PasswordResetConfirmation
+  body: PasswordResetConfirmation
 }
 
 export interface RequestPasswordResetRequest {
-  passwordResetRequest: PasswordResetRequest
+  body: PasswordResetRequest
 }
 
 export interface CreatePasswordSignupSessionRequest {
-  passwordAuth: PasswordAuth
+  body: PasswordAuth
 }
 
 export interface CreateAPIKeyRequest {
-  createAPIKey: CreateAPIKey
+  body: CreateAPIKey
 }
 
 export interface ShowPageRequest {
@@ -613,34 +614,34 @@ export interface ShowsPageRequest {
 }
 
 export interface CreateTeamRequest {
-  createTeam: CreateTeam
+  body: CreateTeam
 }
 
 export interface CreateImageUploadPresignRequest {
   teamId: TeamID
-  createImageUploadPresign: CreateImageUploadPresign
+  body: CreateImageUploadPresign
 }
 
 export interface CreateMediaMultipartUploadRequest {
   teamId: TeamID
-  createMediaMultipartUpload: CreateMediaMultipartUpload
+  body: CreateMediaMultipartUpload
 }
 
 export interface CreateMediaUploadPresignRequest {
   teamId: TeamID
-  createMediaUploadPresign: CreateMediaUploadPresign
+  body: CreateMediaUploadPresign
 }
 
 export interface CompleteMediaMultipartUploadRequest {
   teamId: TeamID
   uploadSessionId: UploadSessionID
-  completeMediaMultipartUpload: CompleteMediaMultipartUpload
+  body: CompleteMediaMultipartUpload
 }
 
 export interface PresignMediaUploadPartsRequest {
   teamId: TeamID
   uploadSessionId: UploadSessionID
-  presignMediaUploadParts: PresignMediaUploadParts
+  body: PresignMediaUploadParts
 }
 
 export interface ListShowsRequest {
@@ -649,13 +650,13 @@ export interface ListShowsRequest {
 
 export interface CreateShowRequest {
   teamId: TeamID
-  createShow: CreateShow
+  body: CreateShow
 }
 
 export interface UpdateShowRequest {
   teamId: TeamID
   showId: ShowID
-  updateShow: UpdateShow
+  body: UpdateShow
 }
 
 export interface ListEpisodesRequest {
@@ -666,14 +667,14 @@ export interface ListEpisodesRequest {
 export interface CreateEpisodeRequest {
   teamId: TeamID
   showId: ShowID
-  createEpisode: CreateEpisode
+  body: CreateEpisode
 }
 
 export interface UpdateEpisodeRequest {
   teamId: TeamID
   showId: ShowID
   episodeId: EpisodeID
-  updateEpisode: UpdateEpisode
+  body: UpdateEpisode
 }
 
 export interface EpisodeProcessingEventsRequest {
@@ -805,12 +806,12 @@ export class DefaultApi {
 
   verifyEmailRequest(requestParameters: VerifyEmailRequest): Request {
     if (
-      requestParameters["emailVerification"] === null ||
-      requestParameters["emailVerification"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "emailVerification",
-        'Required parameter "emailVerification" was null or undefined when calling verifyEmail().',
+        "body",
+        'Required parameter "body" was null or undefined when calling verifyEmail().',
       )
     }
 
@@ -819,7 +820,7 @@ export class DefaultApi {
     return new Request(this.baseURL + "/auth/email/verify", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["emailVerification"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
@@ -828,7 +829,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: Session; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -858,13 +859,10 @@ export class DefaultApi {
   }
 
   async verifyEmail(
-    emailVerification: EmailVerification,
+    body: EmailVerification,
     initOverrides?: RequestInit,
   ): Promise<Session> {
-    const response = await this.verifyEmailResult(
-      { emailVerification },
-      initOverrides,
-    )
+    const response = await this.verifyEmailResult({ body }, initOverrides)
     if (response.status === 201) {
       return response.body
     }
@@ -875,12 +873,12 @@ export class DefaultApi {
     requestParameters: CreateGoogleSignupSessionRequest,
   ): Request {
     if (
-      requestParameters["googleSignup"] === null ||
-      requestParameters["googleSignup"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "googleSignup",
-        'Required parameter "googleSignup" was null or undefined when calling createGoogleSignupSession().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createGoogleSignupSession().',
       )
     }
 
@@ -889,7 +887,7 @@ export class DefaultApi {
     return new Request(this.baseURL + "/auth/google/signup", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["googleSignup"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
@@ -898,7 +896,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: Session; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
   > {
     const timedResponse = await this.request(
       this.createGoogleSignupSessionRequest(requestParameters),
@@ -924,11 +922,11 @@ export class DefaultApi {
   }
 
   async createGoogleSignupSession(
-    googleSignup: GoogleSignup,
+    body: GoogleSignup,
     initOverrides?: RequestInit,
   ): Promise<Session> {
     const response = await this.createGoogleSignupSessionResult(
-      { googleSignup },
+      { body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -941,12 +939,12 @@ export class DefaultApi {
     requestParameters: CreatePasswordLoginSessionRequest,
   ): Request {
     if (
-      requestParameters["passwordAuth"] === null ||
-      requestParameters["passwordAuth"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "passwordAuth",
-        'Required parameter "passwordAuth" was null or undefined when calling createPasswordLoginSession().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createPasswordLoginSession().',
       )
     }
 
@@ -955,7 +953,7 @@ export class DefaultApi {
     return new Request(this.baseURL + "/auth/login", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["passwordAuth"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
@@ -964,7 +962,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: Session; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 403; raw: Response }
   > {
@@ -998,11 +996,11 @@ export class DefaultApi {
   }
 
   async createPasswordLoginSession(
-    passwordAuth: PasswordAuth,
+    body: PasswordAuth,
     initOverrides?: RequestInit,
   ): Promise<Session> {
     const response = await this.createPasswordLoginSessionResult(
-      { passwordAuth },
+      { body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -1015,12 +1013,12 @@ export class DefaultApi {
     requestParameters: ConfirmPasswordResetRequest,
   ): Request {
     if (
-      requestParameters["passwordResetConfirmation"] === null ||
-      requestParameters["passwordResetConfirmation"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "passwordResetConfirmation",
-        'Required parameter "passwordResetConfirmation" was null or undefined when calling confirmPasswordReset().',
+        "body",
+        'Required parameter "body" was null or undefined when calling confirmPasswordReset().',
       )
     }
 
@@ -1029,7 +1027,7 @@ export class DefaultApi {
     return new Request(this.baseURL + "/auth/password/reset/confirm", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["passwordResetConfirmation"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
@@ -1038,7 +1036,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: Session; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -1068,11 +1066,11 @@ export class DefaultApi {
   }
 
   async confirmPasswordReset(
-    passwordResetConfirmation: PasswordResetConfirmation,
+    body: PasswordResetConfirmation,
     initOverrides?: RequestInit,
   ): Promise<Session> {
     const response = await this.confirmPasswordResetResult(
-      { passwordResetConfirmation },
+      { body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -1085,12 +1083,12 @@ export class DefaultApi {
     requestParameters: RequestPasswordResetRequest,
   ): Request {
     if (
-      requestParameters["passwordResetRequest"] === null ||
-      requestParameters["passwordResetRequest"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "passwordResetRequest",
-        'Required parameter "passwordResetRequest" was null or undefined when calling requestPasswordReset().',
+        "body",
+        'Required parameter "body" was null or undefined when calling requestPasswordReset().',
       )
     }
 
@@ -1099,14 +1097,17 @@ export class DefaultApi {
     return new Request(this.baseURL + "/auth/password/reset/request", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["passwordResetRequest"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
   async requestPasswordResetResult(
     requestParameters: RequestPasswordResetRequest,
     initOverrides?: RequestInit,
-  ): Promise<{ status: 202; raw: Response } | { status: 400; raw: Response }> {
+  ): Promise<
+    | { status: 202; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
+  > {
     const timedResponse = await this.request(
       this.requestPasswordResetRequest(requestParameters),
       initOverrides,
@@ -1130,11 +1131,11 @@ export class DefaultApi {
   }
 
   async requestPasswordReset(
-    passwordResetRequest: PasswordResetRequest,
+    body: PasswordResetRequest,
     initOverrides?: RequestInit,
   ): Promise<void> {
     const response = await this.requestPasswordResetResult(
-      { passwordResetRequest },
+      { body },
       initOverrides,
     )
     if (response.status === 202) {
@@ -1147,12 +1148,12 @@ export class DefaultApi {
     requestParameters: CreatePasswordSignupSessionRequest,
   ): Request {
     if (
-      requestParameters["passwordAuth"] === null ||
-      requestParameters["passwordAuth"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "passwordAuth",
-        'Required parameter "passwordAuth" was null or undefined when calling createPasswordSignupSession().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createPasswordSignupSession().',
       )
     }
 
@@ -1161,7 +1162,7 @@ export class DefaultApi {
     return new Request(this.baseURL + "/auth/signup", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["passwordAuth"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
@@ -1170,7 +1171,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 202; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 409; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -1199,11 +1200,11 @@ export class DefaultApi {
   }
 
   async createPasswordSignupSession(
-    passwordAuth: PasswordAuth,
+    body: PasswordAuth,
     initOverrides?: RequestInit,
   ): Promise<void> {
     const response = await this.createPasswordSignupSessionResult(
-      { passwordAuth },
+      { body },
       initOverrides,
     )
     if (response.status === 202) {
@@ -1224,7 +1225,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: User; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -1273,7 +1274,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: readonly ListedAPIKey[]; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -1314,12 +1315,12 @@ export class DefaultApi {
 
   createAPIKeyRequest(requestParameters: CreateAPIKeyRequest): Request {
     if (
-      requestParameters["createAPIKey"] === null ||
-      requestParameters["createAPIKey"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "createAPIKey",
-        'Required parameter "createAPIKey" was null or undefined when calling createAPIKey().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createAPIKey().',
       )
     }
 
@@ -1328,7 +1329,7 @@ export class DefaultApi {
     return new Request(this.baseURL + "/session/api-keys", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["createAPIKey"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
@@ -1337,7 +1338,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: CreatedAPIKey; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -1367,13 +1368,10 @@ export class DefaultApi {
   }
 
   async createAPIKey(
-    createAPIKey: CreateAPIKey,
+    body: CreateAPIKey,
     initOverrides?: RequestInit,
   ): Promise<CreatedAPIKey> {
-    const response = await this.createAPIKeyResult(
-      { createAPIKey },
-      initOverrides,
-    )
+    const response = await this.createAPIKeyResult({ body }, initOverrides)
     if (response.status === 201) {
       return response.body
     }
@@ -1392,7 +1390,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: AppShellData; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -1441,7 +1439,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: Team; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -1509,7 +1507,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: ShowPage; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -1580,7 +1578,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: ShowsPage; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -1626,12 +1624,12 @@ export class DefaultApi {
 
   createTeamRequest(requestParameters: CreateTeamRequest): Request {
     if (
-      requestParameters["createTeam"] === null ||
-      requestParameters["createTeam"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "createTeam",
-        'Required parameter "createTeam" was null or undefined when calling createTeam().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createTeam().',
       )
     }
 
@@ -1640,7 +1638,7 @@ export class DefaultApi {
     return new Request(this.baseURL + "/session/teams", {
       method: "POST",
       headers: headerParameters,
-      body: JSON.stringify(requestParameters["createTeam"]),
+      body: JSON.stringify(requestParameters["body"]),
     })
   }
 
@@ -1649,7 +1647,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: Team; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -1679,10 +1677,10 @@ export class DefaultApi {
   }
 
   async createTeam(
-    createTeam: CreateTeam,
+    body: CreateTeam,
     initOverrides?: RequestInit,
   ): Promise<Team> {
-    const response = await this.createTeamResult({ createTeam }, initOverrides)
+    const response = await this.createTeamResult({ body }, initOverrides)
     if (response.status === 201) {
       return response.body
     }
@@ -1703,12 +1701,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["createImageUploadPresign"] === null ||
-      requestParameters["createImageUploadPresign"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "createImageUploadPresign",
-        'Required parameter "createImageUploadPresign" was null or undefined when calling createImageUploadPresign().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createImageUploadPresign().',
       )
     }
 
@@ -1720,7 +1718,7 @@ export class DefaultApi {
       {
         method: "POST",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["createImageUploadPresign"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -1730,7 +1728,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: CreatedImageUploadPresign; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -1765,11 +1763,11 @@ export class DefaultApi {
 
   async createImageUploadPresign(
     teamId: TeamID,
-    createImageUploadPresign: CreateImageUploadPresign,
+    body: CreateImageUploadPresign,
     initOverrides?: RequestInit,
   ): Promise<CreatedImageUploadPresign> {
     const response = await this.createImageUploadPresignResult(
-      { teamId, createImageUploadPresign },
+      { teamId, body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -1792,12 +1790,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["createMediaMultipartUpload"] === null ||
-      requestParameters["createMediaMultipartUpload"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "createMediaMultipartUpload",
-        'Required parameter "createMediaMultipartUpload" was null or undefined when calling createMediaMultipartUpload().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createMediaMultipartUpload().',
       )
     }
 
@@ -1809,7 +1807,7 @@ export class DefaultApi {
       {
         method: "POST",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["createMediaMultipartUpload"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -1819,7 +1817,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: CreatedMediaMultipartUpload; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -1854,11 +1852,11 @@ export class DefaultApi {
 
   async createMediaMultipartUpload(
     teamId: TeamID,
-    createMediaMultipartUpload: CreateMediaMultipartUpload,
+    body: CreateMediaMultipartUpload,
     initOverrides?: RequestInit,
   ): Promise<CreatedMediaMultipartUpload> {
     const response = await this.createMediaMultipartUploadResult(
-      { teamId, createMediaMultipartUpload },
+      { teamId, body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -1881,12 +1879,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["createMediaUploadPresign"] === null ||
-      requestParameters["createMediaUploadPresign"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "createMediaUploadPresign",
-        'Required parameter "createMediaUploadPresign" was null or undefined when calling createMediaUploadPresign().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createMediaUploadPresign().',
       )
     }
 
@@ -1898,7 +1896,7 @@ export class DefaultApi {
       {
         method: "POST",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["createMediaUploadPresign"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -1908,7 +1906,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: CreatedMediaUploadPresign; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -1943,11 +1941,11 @@ export class DefaultApi {
 
   async createMediaUploadPresign(
     teamId: TeamID,
-    createMediaUploadPresign: CreateMediaUploadPresign,
+    body: CreateMediaUploadPresign,
     initOverrides?: RequestInit,
   ): Promise<CreatedMediaUploadPresign> {
     const response = await this.createMediaUploadPresignResult(
-      { teamId, createMediaUploadPresign },
+      { teamId, body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -1980,12 +1978,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["completeMediaMultipartUpload"] === null ||
-      requestParameters["completeMediaMultipartUpload"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "completeMediaMultipartUpload",
-        'Required parameter "completeMediaMultipartUpload" was null or undefined when calling completeMediaMultipartUpload().',
+        "body",
+        'Required parameter "body" was null or undefined when calling completeMediaMultipartUpload().',
       )
     }
 
@@ -1997,7 +1995,7 @@ export class DefaultApi {
       {
         method: "POST",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["completeMediaMultipartUpload"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -2007,7 +2005,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: CompletedMediaMultipartUpload; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -2043,11 +2041,11 @@ export class DefaultApi {
   async completeMediaMultipartUpload(
     teamId: TeamID,
     uploadSessionId: UploadSessionID,
-    completeMediaMultipartUpload: CompleteMediaMultipartUpload,
+    body: CompleteMediaMultipartUpload,
     initOverrides?: RequestInit,
   ): Promise<CompletedMediaMultipartUpload> {
     const response = await this.completeMediaMultipartUploadResult(
-      { teamId, uploadSessionId, completeMediaMultipartUpload },
+      { teamId, uploadSessionId, body },
       initOverrides,
     )
     if (response.status === 200) {
@@ -2080,12 +2078,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["presignMediaUploadParts"] === null ||
-      requestParameters["presignMediaUploadParts"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "presignMediaUploadParts",
-        'Required parameter "presignMediaUploadParts" was null or undefined when calling presignMediaUploadParts().',
+        "body",
+        'Required parameter "body" was null or undefined when calling presignMediaUploadParts().',
       )
     }
 
@@ -2097,7 +2095,7 @@ export class DefaultApi {
       {
         method: "POST",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["presignMediaUploadParts"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -2107,7 +2105,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: PresignedMediaUploadParts; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 404; raw: Response }
   > {
@@ -2143,11 +2141,11 @@ export class DefaultApi {
   async presignMediaUploadParts(
     teamId: TeamID,
     uploadSessionId: UploadSessionID,
-    presignMediaUploadParts: PresignMediaUploadParts,
+    body: PresignMediaUploadParts,
     initOverrides?: RequestInit,
   ): Promise<PresignedMediaUploadParts> {
     const response = await this.presignMediaUploadPartsResult(
-      { teamId, uploadSessionId, presignMediaUploadParts },
+      { teamId, uploadSessionId, body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -2183,7 +2181,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: readonly Show[]; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -2235,12 +2233,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["createShow"] === null ||
-      requestParameters["createShow"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "createShow",
-        'Required parameter "createShow" was null or undefined when calling createShow().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createShow().',
       )
     }
 
@@ -2252,7 +2250,7 @@ export class DefaultApi {
       {
         method: "POST",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["createShow"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -2262,7 +2260,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: Show; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 403; raw: Response }
     | { status: 409; raw: Response }
@@ -2301,11 +2299,11 @@ export class DefaultApi {
 
   async createShow(
     teamId: TeamID,
-    createShow: CreateShow,
+    body: CreateShow,
     initOverrides?: RequestInit,
   ): Promise<Show> {
     const response = await this.createShowResult(
-      { teamId, createShow },
+      { teamId, body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -2336,12 +2334,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["updateShow"] === null ||
-      requestParameters["updateShow"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "updateShow",
-        'Required parameter "updateShow" was null or undefined when calling updateShow().',
+        "body",
+        'Required parameter "body" was null or undefined when calling updateShow().',
       )
     }
 
@@ -2353,7 +2351,7 @@ export class DefaultApi {
       {
         method: "PUT",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["updateShow"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -2363,7 +2361,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: Show; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -2395,11 +2393,11 @@ export class DefaultApi {
   async updateShow(
     teamId: TeamID,
     showId: ShowID,
-    updateShow: UpdateShow,
+    body: UpdateShow,
     initOverrides?: RequestInit,
   ): Promise<Show> {
     const response = await this.updateShowResult(
-      { teamId, showId, updateShow },
+      { teamId, showId, body },
       initOverrides,
     )
     if (response.status === 200) {
@@ -2445,7 +2443,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: readonly Episode[]; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -2511,12 +2509,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["createEpisode"] === null ||
-      requestParameters["createEpisode"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "createEpisode",
-        'Required parameter "createEpisode" was null or undefined when calling createEpisode().',
+        "body",
+        'Required parameter "body" was null or undefined when calling createEpisode().',
       )
     }
 
@@ -2528,7 +2526,7 @@ export class DefaultApi {
       {
         method: "POST",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["createEpisode"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -2538,7 +2536,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 201; body: Episode; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -2570,11 +2568,11 @@ export class DefaultApi {
   async createEpisode(
     teamId: TeamID,
     showId: ShowID,
-    createEpisode: CreateEpisode,
+    body: CreateEpisode,
     initOverrides?: RequestInit,
   ): Promise<Episode> {
     const response = await this.createEpisodeResult(
-      { teamId, showId, createEpisode },
+      { teamId, showId, body },
       initOverrides,
     )
     if (response.status === 201) {
@@ -2615,12 +2613,12 @@ export class DefaultApi {
     }
 
     if (
-      requestParameters["updateEpisode"] === null ||
-      requestParameters["updateEpisode"] === undefined
+      requestParameters["body"] === null ||
+      requestParameters["body"] === undefined
     ) {
       throw new RequiredError(
-        "updateEpisode",
-        'Required parameter "updateEpisode" was null or undefined when calling updateEpisode().',
+        "body",
+        'Required parameter "body" was null or undefined when calling updateEpisode().',
       )
     }
 
@@ -2632,7 +2630,7 @@ export class DefaultApi {
       {
         method: "PUT",
         headers: headerParameters,
-        body: JSON.stringify(requestParameters["updateEpisode"]),
+        body: JSON.stringify(requestParameters["body"]),
       },
     )
   }
@@ -2642,7 +2640,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: Episode; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -2675,11 +2673,11 @@ export class DefaultApi {
     teamId: TeamID,
     showId: ShowID,
     episodeId: EpisodeID,
-    updateEpisode: UpdateEpisode,
+    body: UpdateEpisode,
     initOverrides?: RequestInit,
   ): Promise<Episode> {
     const response = await this.updateEpisodeResult(
-      { teamId, showId, episodeId, updateEpisode },
+      { teamId, showId, episodeId, body },
       initOverrides,
     )
     if (response.status === 200) {
@@ -2742,7 +2740,7 @@ export class DefaultApi {
         body: AsyncIterable<EpisodeProcessingCompleteEvent>
         raw: Response
       }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 401; raw: Response }
     | { status: 403; raw: Response }
     | { status: 404; raw: Response }
@@ -2838,7 +2836,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: readonly TestEmail[]; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
     | { status: 404; raw: Response }
   > {
     const timedResponse = await this.request(
@@ -2905,7 +2903,7 @@ export class DefaultApi {
     initOverrides?: RequestInit,
   ): Promise<
     | { status: 200; body: string; raw: Response }
-    | { status: 400; raw: Response }
+    | { status: 400; body: ValidationErr; raw: Response }
   > {
     const timedResponse = await this.request(
       this.renderShowRSSFeedRequest(requestParameters),

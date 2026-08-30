@@ -661,9 +661,17 @@ async function runInterceptors(
 
 {{end}}{{end}}{{end}}        const headerParameters: Record<string, string> = {};
 {{if .HasSSE}}        headerParameters['Accept'] = 'text/event-stream';
-{{end}}{{if .BodyParamName}}        headerParameters['Content-Type'] = 'application/json';
-{{end}}{{if .RawBodyParamName}}        headerParameters['Content-Type'] = {{printf "%q" .RawBodyMediaType}};
-{{end}}{{with .MultipartBody}}        const multipartBoundary = newMultipartBoundary();
+{{end}}{{with .JSONBody}}{{if .Required}}        headerParameters['Content-Type'] = 'application/json';
+{{else}}        const requestBody = requestParameters['{{.Name}}'];
+        if (requestBody !== null && requestBody !== undefined) {
+            headerParameters['Content-Type'] = 'application/json';
+        }
+{{end}}{{end}}{{with .RawBody}}{{if .Required}}        headerParameters['Content-Type'] = {{printf "%q" .MediaType}};
+{{else}}        const requestBody = requestParameters['{{.Name}}'];
+        if (requestBody !== null && requestBody !== undefined) {
+            headerParameters['Content-Type'] = {{printf "%q" .MediaType}};
+        }
+{{end}}{{end}}{{with .MultipartBody}}        const multipartBoundary = newMultipartBoundary();
         headerParameters['Content-Type'] = {{printf "%q" .MediaType}} + '; boundary=' + multipartBoundary;
         const multipartBody = new Blob([
 {{range .Parts}}            '--' + multipartBoundary + '\r\n',
@@ -692,10 +700,13 @@ async function runInterceptors(
 {{end}}        return new Request(this.baseURL + {{.PathExpression}}{{if .QueryParams}} + (queryString === '' ? '' : '?' + queryString){{end}}, {
             method: '{{.Method}}',
             headers: headerParameters,
-{{if .BodyParamName}}            body: JSON.stringify(requestParameters['{{.BodyParamName}}']),
-{{else if .RawBodyParamName}}            body: requestParameters['{{.RawBodyParamName}}'],
-{{else if .MultipartBody}}            body: multipartBody,
-{{end}}        });
+{{with .JSONBody}}{{if .Required}}            body: JSON.stringify(requestParameters['{{.Name}}']),
+{{else}}            body: requestBody === null || requestBody === undefined ? undefined : JSON.stringify(requestBody),
+{{end}}{{else}}{{with .RawBody}}{{if .Required}}            body: requestParameters['{{.Name}}'],
+{{else}}            body: requestBody,
+{{end}}{{else}}{{if .MultipartBody}}            body: multipartBody,
+{{end}}{{end}}{{end}}
+        });
     }
 
     async {{.ID}}Result({{.RawRequestSignature}}initOverrides?: RequestInit): Promise<{{.ResultType}}> {

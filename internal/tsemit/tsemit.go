@@ -7,10 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
+	"github.com/responsibleapi/oasmith/internal/clientgen"
 	"github.com/responsibleapi/oasmith/internal/emit"
 	"github.com/responsibleapi/oasmith/internal/openapi"
 )
@@ -186,24 +186,22 @@ func modelsTemplateData(doc *openapi.Document) modelsData {
 }
 
 func apiSource(doc *openapi.Document) (string, error) {
-	operations := doc.Operations()
-	for _, route := range operations {
-		if err := validateRequestBody(route.Operation); err != nil {
-			return "", err
-		}
+	operations, err := clientgen.Analyze(doc)
+	if err != nil {
+		return "", fmt.Errorf("analyze client operations: %w", err)
 	}
 	data := apiData{
 		Imports: modelImports(doc, operations),
 	}
-	for _, route := range operations {
-		params := operationParams(route.Operation)
+	for _, analyzed := range operations {
+		params := operationParams(analyzed)
 		if len(params) > 0 {
 			data.RequestInterfaces = append(data.RequestInterfaces, requestInterfaceData{
-				Name:   requestInterfaceName(route.Operation.OperationID),
+				Name:   requestInterfaceName(analyzed.Route.Operation.OperationID),
 				Params: params,
 			})
 		}
-		operation := operationTemplateData(doc, route)
+		operation := operationTemplateData(analyzed)
 		if operation.HasSSE {
 			data.HasSSE = true
 		}
@@ -243,12 +241,22 @@ type operationData struct {
 	PositionalSignature     string
 	PositionalRequestObject string
 	PathExpression          string
-	BodyParamName           string
-	RawBodyParamName        string
-	RawBodyMediaType        string
+	JSONBody                *tsRequestBodyData
+	RawBody                 *tsRawRequestBodyData
 	MultipartBody           *tsMultipartBodyData
 	QueryParams             []opParam
 	HasSSE                  bool
+}
+
+type tsRequestBodyData struct {
+	Name     string
+	Required bool
+}
+
+type tsRawRequestBodyData struct {
+	Name      string
+	Required  bool
+	MediaType string
 }
 
 type tsMultipartBodyData struct {
@@ -265,10 +273,11 @@ type tsMultipartPartData struct {
 	AllowedContentType string
 }
 
-func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) operationData {
+func operationTemplateData(analyzed clientgen.Operation) operationData {
+	route := analyzed.Route
 	op := route.Operation
-	params := operationParams(op)
-	responses := operationResponses(doc, route.Method, op)
+	params := operationParams(analyzed)
+	responses := operationResponses(analyzed.Responses)
 	data := operationData{
 		ID:                      openapi.LowerCamel(op.OperationID),
 		Method:                  route.Method,
@@ -282,7 +291,7 @@ func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) 
 		PositionalSignature:     positionalSignature(params),
 		PositionalRequestObject: positionalRequestObject(params),
 		PathExpression:          pathExpression(route.Path, params),
-		HasSSE:                  doc.OperationHasSSEResponseMethod(route.Method, op),
+		HasSSE:                  analyzed.Accept == "text/event-stream",
 	}
 	for _, param := range params {
 		if param.Required {
@@ -300,13 +309,18 @@ func operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) 
 	if body := bodyParam(params); body != nil {
 		switch body.Kind {
 		case "body":
-			data.BodyParamName = body.Name
+			data.JSONBody = &tsRequestBodyData{Name: body.Name, Required: body.Required}
 		case "rawBody":
-			data.RawBodyParamName = body.Name
-			data.RawBodyMediaType, _ = op.RawRequestBodyMediaType()
+			data.RawBody = &tsRawRequestBodyData{
+				Name:      body.Name,
+				Required:  body.Required,
+				MediaType: analyzed.RequestBody.Raw.MediaType,
+			}
 		}
 	}
-	data.MultipartBody, _ = sequentialMultipartBody(op)
+	if analyzed.RequestBody.Multipart != nil {
+		data.MultipartBody = multipartBodyTemplateData(analyzed.RequestBody.Multipart)
+	}
 	return data
 }
 
@@ -329,13 +343,13 @@ type opResponse struct {
 	Text   bool
 }
 
-func modelImports(doc *openapi.Document, operations []openapi.OperationRoute) []string {
+func modelImports(doc *openapi.Document, operations []clientgen.Operation) []string {
 	seen := map[string]bool{}
-	for _, route := range operations {
-		for _, param := range operationParams(route.Operation) {
+	for _, operation := range operations {
+		for _, param := range operationParams(operation) {
 			collectModelNames(doc, param.Type, seen)
 		}
-		for _, response := range operationResponses(doc, route.Method, route.Operation) {
+		for _, response := range operationResponses(operation.Responses) {
 			collectModelNames(doc, response.Type, seen)
 		}
 	}
@@ -394,7 +408,8 @@ func executeTemplate(name string, data any) (string, error) {
 	return string(raw), err
 }
 
-func operationParams(operation *openapi.Operation) []opParam {
+func operationParams(analyzed clientgen.Operation) []opParam {
+	operation := analyzed.Route.Operation
 	var params []opParam
 	for _, param := range operation.Parameters {
 		params = append(params, opParam{
@@ -407,133 +422,81 @@ func operationParams(operation *openapi.Operation) []opParam {
 			Slice:    param.Schema != nil && param.Schema.IsArray(),
 		})
 	}
-	if multipartBody, ok := sequentialMultipartBody(operation); ok {
-		for _, part := range multipartBody.Parts {
+	if multipartBody := analyzed.RequestBody.Multipart; multipartBody != nil {
+		for index, part := range multipartBody.Parts {
+			name := openapi.LowerCamel(part.Title)
+			if name == "" {
+				name = fmt.Sprintf("part%d", index+1)
+			}
 			params = append(params, opParam{
-				Name:     part.Name,
-				WireName: part.Name,
-				Type:     part.Type,
+				Name:     name,
+				WireName: name,
+				Type:     multipartPartType(part),
 				Required: true,
 				Kind:     "multipart",
 			})
 		}
-	} else if schema := operation.JSONRequestSchema(); schema != nil {
-		name := openapi.LowerCamel(openapi.RefName(schema.Ref))
-		if name == "" {
-			name = "body"
-		}
+	} else if body := analyzed.RequestBody.JSON; body != nil {
 		params = append(params, opParam{
-			Name:     name,
+			Name:     "body",
 			WireName: "body",
-			Type:     tsType(schema),
-			Required: operation.RequestBody.Required,
-			Optional: optional(operation.RequestBody.Required),
+			Type:     tsType(body.Schema),
+			Required: body.Required,
+			Optional: optional(body.Required),
 			Kind:     "body",
 		})
-	} else if _, ok := operation.RawRequestBodyMediaType(); ok {
+	} else if body := analyzed.RequestBody.Raw; body != nil {
 		params = append(params, opParam{
 			Name:     "body",
 			WireName: "body",
 			Type:     "BodyInit",
-			Required: operation.RequestBody.Required,
-			Optional: optional(operation.RequestBody.Required),
+			Required: body.Required,
+			Optional: optional(body.Required),
 			Kind:     "rawBody",
 		})
 	}
 	return params
 }
 
-func validateRequestBody(operation *openapi.Operation) error {
-	if operation.RequestBody == nil {
-		return nil
-	}
-	if media, ok := operation.RequestBody.Content["application/json"]; ok {
-		if media.Schema != nil {
-			return nil
+func multipartBodyTemplateData(analyzed *clientgen.MultipartBody) *tsMultipartBodyData {
+	body := &tsMultipartBodyData{MediaType: analyzed.MediaType}
+	for index, analyzedPart := range analyzed.Parts {
+		name := openapi.LowerCamel(analyzedPart.Title)
+		if name == "" {
+			name = fmt.Sprintf("part%d", index+1)
 		}
-		return fmt.Errorf("operation %s has unsupported request body: application/json schema is missing", operation.OperationID)
+		part := tsMultipartPartData{
+			Name:        name,
+			Type:        multipartPartType(analyzedPart),
+			ContentType: analyzedPart.ContentType,
+			Binary:      analyzedPart.Binary,
+			JSON:        !analyzedPart.Binary,
+		}
+		if analyzedPart.Binary {
+			part.AllowedContentType = part.ContentType
+		}
+		body.Parts = append(body.Parts, part)
 	}
-	if _, ok := sequentialMultipartBody(operation); ok {
-		return nil
-	}
-	if mediaType, ok := operation.RawRequestBodyMediaType(); ok && !strings.HasPrefix(mediaType, "multipart/") {
-		return nil
-	}
-	return fmt.Errorf("operation %s has unsupported request body", operation.OperationID)
+	return body
 }
 
-func sequentialMultipartBody(operation *openapi.Operation) (*tsMultipartBodyData, bool) {
-	if operation.RequestBody == nil {
-		return nil, false
+func multipartPartType(part clientgen.MultipartPart) string {
+	if part.Binary {
+		return "Blob"
 	}
-	mediaTypes := make([]string, 0, len(operation.RequestBody.Content))
-	for mediaType := range operation.RequestBody.Content {
-		mediaTypes = append(mediaTypes, mediaType)
-	}
-	sort.Strings(mediaTypes)
-	for _, mediaType := range mediaTypes {
-		media := operation.RequestBody.Content[mediaType]
-		if !strings.HasPrefix(mediaType, "multipart/") || media.Schema == nil ||
-			!media.Schema.Type.Has("array") || len(media.Schema.PrefixItems) != 2 ||
-			len(media.PrefixEncoding) != 2 {
-			continue
-		}
-		minimum, maximum := 0, 0
-		if media.Schema.MinItems != nil {
-			minimum = *media.Schema.MinItems
-		}
-		if media.Schema.MaxItems != nil {
-			maximum = *media.Schema.MaxItems
-		}
-		if minimum != 2 || maximum != 2 {
-			continue
-		}
-		body := &tsMultipartBodyData{MediaType: mediaType}
-		for index, schema := range media.Schema.PrefixItems {
-			name := openapi.LowerCamel(schema.Title)
-			if name == "" {
-				name = fmt.Sprintf("part%d", index+1)
-			}
-			part := tsMultipartPartData{
-				Name:        name,
-				ContentType: strings.TrimSpace(media.PrefixEncoding[index].ContentType),
-			}
-			if schema.Type.Has("string") && schema.Format == "binary" {
-				part.Binary = true
-				part.Type = "Blob"
-				part.AllowedContentType = part.ContentType
-			} else {
-				part.JSON = true
-				part.Type = tsType(schema)
-			}
-			body.Parts = append(body.Parts, part)
-		}
-		return body, true
-	}
-	return nil, false
+	return tsType(part.Schema)
 }
 
-func operationResponses(doc *openapi.Document, method string, operation *openapi.Operation) []opResponse {
-	var statuses []string
-	for status := range operation.Responses {
-		statuses = append(statuses, status)
-	}
-	slices.Sort(statuses)
-	responses := make([]opResponse, 0, len(statuses))
-	for _, status := range statuses {
-		statusCode, ok := parseStatus(status)
-		if !ok {
-			continue
-		}
-		response := doc.ResolveResponse(operation.Responses[status])
-		kind := responseBodyKind(response)
+func operationResponses(analyzed []clientgen.Response) []opResponse {
+	responses := make([]opResponse, 0, len(analyzed))
+	for _, response := range analyzed {
 		responses = append(responses, opResponse{
-			Status: statusCode,
-			Type:   responseBodyType(response),
-			Body:   responseHasTypedBody(response),
-			SSE:    method == "GET" && responseHasSSEBody(response),
-			JSON:   kind == "json",
-			Text:   kind == "text",
+			Status: response.Status,
+			Type:   tsType(response.Schema),
+			Body:   response.HasBody(),
+			SSE:    response.SSE,
+			JSON:   response.JSON(),
+			Text:   response.Text(),
 		})
 	}
 	return responses
@@ -579,63 +542,8 @@ func operationResultType(responses []opResponse) string {
 	return strings.Join(variants, " | ")
 }
 
-func responseBodyType(response openapi.Response) string {
-	if mt, ok := response.Content["text/event-stream"]; ok && mt.ItemSchema != nil {
-		return tsType(mt.ItemSchema)
-	}
-	if mt, ok := response.Content["application/json"]; ok && mt.Schema != nil {
-		return tsType(mt.Schema)
-	}
-	if mt, ok := response.Content["application/rss+xml"]; ok && mt.Schema != nil {
-		return tsType(mt.Schema)
-	}
-	return "unknown"
-}
-
-func responseHasTypedBody(response openapi.Response) bool {
-	if mt, ok := response.Content["application/json"]; ok && mt.Schema != nil {
-		return true
-	}
-	if mt, ok := response.Content["application/rss+xml"]; ok && mt.Schema != nil {
-		return true
-	}
-	return false
-}
-
-func responseHasSSEBody(response openapi.Response) bool {
-	mt, ok := response.Content["text/event-stream"]
-	return ok && mt.ItemSchema != nil
-}
-
-func responseBodyKind(response openapi.Response) string {
-	if mt, ok := response.Content["text/event-stream"]; ok && mt.ItemSchema != nil {
-		return "sse"
-	}
-	if mt, ok := response.Content["application/json"]; ok && mt.Schema != nil {
-		return "json"
-	}
-	if mt, ok := response.Content["application/rss+xml"]; ok && mt.Schema != nil {
-		return "text"
-	}
-	return ""
-}
-
 func isSuccessStatus(status int) bool {
 	return status >= 200 && status < 300
-}
-
-func parseStatus(status string) (int, bool) {
-	if len(status) != 3 {
-		return 0, false
-	}
-	value := 0
-	for _, digit := range status {
-		if digit < '0' || digit > '9' {
-			return 0, false
-		}
-		value = value*10 + int(digit-'0')
-	}
-	return value, true
 }
 
 func uniqueStrings(values []string) []string {

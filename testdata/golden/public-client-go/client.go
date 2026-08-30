@@ -693,6 +693,164 @@ func (c *Client) WatchEvents(ctx context.Context) (*WatchEventsResponse, error) 
 	}
 }
 
+type PatchThingParams struct {
+	Body *CreateThing
+}
+
+type PatchThingResponse struct {
+	StatusCode int
+	Raw        *http.Response
+}
+
+func (c *Client) NewPatchThingRequest(ctx context.Context, params PatchThingParams) (*http.Request, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("build PatchThing request: context must not be nil")
+	}
+	path := "/optional-json"
+
+	endpoint, err := url.Parse(c.baseURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("build PatchThing URL: %w", err)
+	}
+	var requestBody io.Reader
+	if params.Body != nil {
+		encodedBody, err := json.Marshal(params.Body)
+		if err != nil {
+			return nil, fmt.Errorf("encode PatchThing JSON body: %w", err)
+		}
+		requestBody = bytes.NewReader(encodedBody)
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint.String(), requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("build PatchThing request: %w", err)
+	}
+	req.Header.Set("Accept", "*/*")
+	if requestBody != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return req, nil
+}
+
+func (c *Client) PatchThing(ctx context.Context, params PatchThingParams) (*PatchThingResponse, error) {
+
+	req, err := c.NewPatchThingRequest(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	responseCtx, lifecycle := c.responseContext(ctx)
+	req = req.Clone(responseCtx)
+	keepLifecycle := false
+	defer func() {
+		if !keepLifecycle {
+			lifecycle.close()
+		}
+	}()
+	res, err := c.do(responseCtx, req)
+	if err != nil {
+		return nil, fmt.Errorf("execute PatchThing request: %w", err)
+	}
+	if res == nil {
+		return nil, fmt.Errorf("execute PatchThing request: HTTP client returned nil response")
+	}
+
+	result := &PatchThingResponse{StatusCode: res.StatusCode, Raw: res}
+	switch res.StatusCode {
+	case 204:
+		_ = res.Body.Close()
+		return result, nil
+	default:
+		rawBody, readErr := io.ReadAll(io.LimitReader(res.Body, maxDiagnosticBodyBytes))
+		_ = res.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("read unexpected PatchThing response status %d: %w", res.StatusCode, readErr)
+		}
+		return nil, &UnexpectedStatusError{
+			Method:     req.Method,
+			URL:        req.URL.String(),
+			StatusCode: res.StatusCode,
+			Body:       strings.TrimSpace(string(rawBody)),
+		}
+	}
+}
+
+type UploadOptionalMediaParams struct {
+	Body        io.Reader
+	ContentType string
+}
+
+type UploadOptionalMediaResponse struct {
+	StatusCode int
+	Raw        *http.Response
+}
+
+func (c *Client) NewUploadOptionalMediaRequest(ctx context.Context, params UploadOptionalMediaParams) (*http.Request, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("build UploadOptionalMedia request: context must not be nil")
+	}
+	path := "/optional-raw"
+
+	endpoint, err := url.Parse(c.baseURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("build UploadOptionalMedia URL: %w", err)
+	}
+	requestBody := params.Body
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint.String(), requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("build UploadOptionalMedia request: %w", err)
+	}
+	req.Header.Set("Accept", "*/*")
+	if requestBody != nil {
+		contentType := strings.TrimSpace(params.ContentType)
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		req.Header.Set("Content-Type", contentType)
+	}
+	return req, nil
+}
+
+func (c *Client) UploadOptionalMedia(ctx context.Context, params UploadOptionalMediaParams) (*UploadOptionalMediaResponse, error) {
+
+	req, err := c.NewUploadOptionalMediaRequest(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	responseCtx, lifecycle := c.responseContext(ctx)
+	req = req.Clone(responseCtx)
+	keepLifecycle := false
+	defer func() {
+		if !keepLifecycle {
+			lifecycle.close()
+		}
+	}()
+	res, err := c.do(responseCtx, req)
+	if err != nil {
+		return nil, fmt.Errorf("execute UploadOptionalMedia request: %w", err)
+	}
+	if res == nil {
+		return nil, fmt.Errorf("execute UploadOptionalMedia request: HTTP client returned nil response")
+	}
+
+	result := &UploadOptionalMediaResponse{StatusCode: res.StatusCode, Raw: res}
+	switch res.StatusCode {
+	case 204:
+		_ = res.Body.Close()
+		return result, nil
+	default:
+		rawBody, readErr := io.ReadAll(io.LimitReader(res.Body, maxDiagnosticBodyBytes))
+		_ = res.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("read unexpected UploadOptionalMedia response status %d: %w", res.StatusCode, readErr)
+		}
+		return nil, &UnexpectedStatusError{
+			Method:     req.Method,
+			URL:        req.URL.String(),
+			StatusCode: res.StatusCode,
+			Body:       strings.TrimSpace(string(rawBody)),
+		}
+	}
+}
+
 type CreateThingParams struct {
 	ThingId    string
 	Tag        *string
@@ -737,20 +895,17 @@ func (c *Client) NewCreateThingRequest(ctx context.Context, params CreateThingPa
 		}
 	}
 	endpoint.RawQuery = query.Encode()
-	var requestBody io.Reader
 	encodedBody, err := json.Marshal(params.Body)
 	if err != nil {
 		return nil, fmt.Errorf("encode CreateThing JSON body: %w", err)
 	}
-	requestBody = bytes.NewReader(encodedBody)
+	requestBody := bytes.NewReader(encodedBody)
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint.String(), requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("build CreateThing request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	if requestBody != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-request-id", fmt.Sprint(params.XRequestId))
 	return req, nil
 }
@@ -796,6 +951,9 @@ func (c *Client) CreateThing(ctx context.Context, params CreateThingParams) (*Cr
 		}
 		_ = res.Body.Close()
 		result.Status400 = &decoded
+		return result, nil
+	case 401, 403:
+		_ = res.Body.Close()
 		return result, nil
 	default:
 		rawBody, readErr := io.ReadAll(io.LimitReader(res.Body, maxDiagnosticBodyBytes))

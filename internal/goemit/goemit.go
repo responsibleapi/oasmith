@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/responsibleapi/oasmith/internal/clientgen"
 	"github.com/responsibleapi/oasmith/internal/emit"
 	"github.com/responsibleapi/oasmith/internal/openapi"
 )
@@ -47,10 +48,14 @@ func Emit(doc *openapi.Document, opts Options) error {
 
 // EmitClient writes Go models and an HTTP client for the supplied OpenAPI document.
 func EmitClient(doc *openapi.Document, opts Options) error {
+	operations, err := clientgen.Analyze(doc)
+	if err != nil {
+		return fmt.Errorf("analyze client operations: %w", err)
+	}
 	if err := Emit(doc, opts); err != nil {
 		return err
 	}
-	raw, err := executeTemplate("client.go", goClientTemplateData(doc, opts.SourcePath))
+	raw, err := executeTemplate("client.go", goClientTemplateData(doc, opts.SourcePath, operations))
 	if err != nil {
 		return err
 	}
