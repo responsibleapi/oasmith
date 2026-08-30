@@ -2,9 +2,10 @@ package goemit
 
 import (
 	"fmt"
-	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/responsibleapi/oasmith/internal/clientgen"
 	"github.com/responsibleapi/oasmith/internal/openapi"
 )
 
@@ -26,6 +27,7 @@ type goOperationData struct {
 	Params           []goOperationParamData
 	ResponsesType    string
 	Responses        []goResponseData
+	BodylessStatuses string
 	Accept           string
 	HasJSONBody      bool
 	RequiredJSONBody bool
@@ -78,13 +80,13 @@ type goResponseData struct {
 	ReconnectableSSE bool
 }
 
-func goClientTemplateData(doc *openapi.Document, sourcePath string) goClientData {
+func goClientTemplateData(doc *openapi.Document, sourcePath string, operations []clientgen.Operation) goClientData {
 	e := emitter{}
 	data := goClientData{
 		PackageName: packageName(doc, sourcePath),
 	}
-	for _, route := range doc.Operations() {
-		operation := e.operationTemplateData(doc, route)
+	for _, analyzed := range operations {
+		operation := e.operationTemplateData(doc, analyzed)
 		data.HasJSONBody = data.HasJSONBody || operation.HasJSONBody
 		data.HasMultipartBody = data.HasMultipartBody || operation.MultipartBody != nil
 		for _, response := range operation.Responses {
@@ -95,7 +97,8 @@ func goClientTemplateData(doc *openapi.Document, sourcePath string) goClientData
 	return data
 }
 
-func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.OperationRoute) goOperationData {
+func (e *emitter) operationTemplateData(doc *openapi.Document, analyzed clientgen.Operation) goOperationData {
+	route := analyzed.Route
 	op := route.Operation
 	data := goOperationData{
 		ID:            openapi.ExportName(op.OperationID),
@@ -103,7 +106,7 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.Ope
 		Path:          route.Path,
 		ParamsType:    openapi.ExportName(op.OperationID) + "Params",
 		ResponsesType: openapi.ExportName(op.OperationID) + "Response",
-		Accept:        operationAccept(doc, route.Method, op),
+		Accept:        analyzed.Accept,
 	}
 	for _, param := range op.Parameters {
 		paramType := e.goType(param.Schema)
@@ -129,13 +132,13 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.Ope
 		})
 		data.HasQueryParams = data.HasQueryParams || param.In == "query"
 	}
-	if multipartBody, ok := sequentialMultipartBody(e, op); ok {
-		data.MultipartBody = multipartBody
+	if analyzed.RequestBody.Multipart != nil {
+		data.MultipartBody = e.multipartBodyTemplateData(analyzed.RequestBody.Multipart)
 		data.HasRequestBody = true
 		data.HasParams = true
-	} else if schema := op.JSONRequestSchema(); schema != nil {
-		paramType := e.goType(schema)
-		required := op.RequestBody != nil && op.RequestBody.Required
+	} else if body := analyzed.RequestBody.JSON; body != nil {
+		paramType := e.goType(body.Schema)
+		required := body.Required
 		if !required {
 			paramType = optionalType(paramType)
 		}
@@ -149,73 +152,46 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, route openapi.Ope
 		data.HasJSONBody = true
 		data.RequiredJSONBody = required
 		data.HasRequestBody = true
-	} else if mediaType, ok := op.RawRequestBodyMediaType(); ok {
+	} else if body := analyzed.RequestBody.Raw; body != nil {
 		data.HasRawBody = true
-		data.RequiredRawBody = op.RequestBody != nil && op.RequestBody.Required
-		data.RawBodyMediaType = mediaType
+		data.RequiredRawBody = body.Required
+		data.RawBodyMediaType = body.MediaType
 		data.HasRequestBody = true
 	}
 	data.HasParams = len(data.Params) > 0 || data.HasRawBody
 	if data.MultipartBody != nil {
 		data.HasParams = true
 	}
-	data.Responses = e.operationResponses(doc, route.Method, op)
+	data.Responses, data.BodylessStatuses = e.operationResponses(analyzed.Responses)
 	for _, response := range data.Responses {
 		data.ReconnectableSSE = data.ReconnectableSSE || response.ReconnectableSSE
 	}
 	return data
 }
 
-func sequentialMultipartBody(e *emitter, operation *openapi.Operation) (*goMultipartBodyData, bool) {
-	if operation.RequestBody == nil {
-		return nil, false
+func (e *emitter) multipartBodyTemplateData(analyzed *clientgen.MultipartBody) *goMultipartBodyData {
+	body := &goMultipartBodyData{MediaType: analyzed.MediaType}
+	for index, analyzedPart := range analyzed.Parts {
+		fieldName := openapi.ExportName(analyzedPart.Title)
+		if fieldName == "" {
+			fieldName = fmt.Sprintf("Part%d", index+1)
+		}
+		part := goMultipartPartData{
+			FieldName:   fieldName,
+			ContentType: analyzedPart.ContentType,
+		}
+		if analyzedPart.Binary {
+			part.Binary = true
+			part.Type = "io.Reader"
+			part.ContentTypeField = fieldName + "ContentType"
+			part.AllowedContentType = part.ContentType
+		} else {
+			part.JSON = true
+			part.Type = e.goType(analyzedPart.Schema)
+		}
+		body.Parts = append(body.Parts, part)
 	}
-	mediaTypes := make([]string, 0, len(operation.RequestBody.Content))
-	for mediaType := range operation.RequestBody.Content {
-		mediaTypes = append(mediaTypes, mediaType)
-	}
-	sort.Strings(mediaTypes)
-	for _, mediaType := range mediaTypes {
-		media := operation.RequestBody.Content[mediaType]
-		if !strings.HasPrefix(mediaType, "multipart/") || media.Schema == nil ||
-			!media.Schema.Type.Has("array") || len(media.Schema.PrefixItems) != 2 ||
-			len(media.PrefixEncoding) != 2 {
-			continue
-		}
-		minimum, maximum := 0, 0
-		if media.Schema.MinItems != nil {
-			minimum = *media.Schema.MinItems
-		}
-		if media.Schema.MaxItems != nil {
-			maximum = *media.Schema.MaxItems
-		}
-		if minimum != 2 || maximum != 2 {
-			continue
-		}
-		body := &goMultipartBodyData{MediaType: mediaType}
-		for index, schema := range media.Schema.PrefixItems {
-			fieldName := openapi.ExportName(schema.Title)
-			if fieldName == "" {
-				fieldName = fmt.Sprintf("Part%d", index+1)
-			}
-			part := goMultipartPartData{
-				FieldName:   fieldName,
-				ContentType: strings.TrimSpace(media.PrefixEncoding[index].ContentType),
-			}
-			if schema.Type.Has("string") && schema.Format == "binary" {
-				part.Binary = true
-				part.Type = "io.Reader"
-				part.ContentTypeField = fieldName + "ContentType"
-				part.AllowedContentType = part.ContentType
-			} else {
-				part.JSON = true
-				part.Type = e.goType(schema)
-			}
-			body.Parts = append(body.Parts, part)
-		}
-		return body, true
-	}
-	return nil, false
+	return body
 }
 
 func schemaIsString(doc *openapi.Document, schema *openapi.Schema) bool {
@@ -228,83 +204,24 @@ func schemaIsString(doc *openapi.Document, schema *openapi.Schema) bool {
 	return schema.Type.Has("string")
 }
 
-func (e *emitter) operationResponses(doc *openapi.Document, method string, operation *openapi.Operation) []goResponseData {
-	statuses := make([]string, 0, len(operation.Responses))
-	for status := range operation.Responses {
-		statuses = append(statuses, status)
-	}
-	sort.Strings(statuses)
-	responses := make([]goResponseData, 0, len(statuses))
-	for _, status := range statuses {
-		statusCode, ok := parseStatus(status)
-		if !ok {
-			continue
-		}
-		response := doc.ResolveResponse(operation.Responses[status])
+func (e *emitter) operationResponses(analyzed []clientgen.Response) ([]goResponseData, string) {
+	responses := make([]goResponseData, 0, len(analyzed))
+	var bodylessStatuses []string
+	for _, response := range analyzed {
 		responseData := goResponseData{
-			Status:    statusCode,
-			FieldName: fmt.Sprintf("Status%d", statusCode),
+			Status:           response.Status,
+			FieldName:        fmt.Sprintf("Status%d", response.Status),
+			Type:             e.goType(response.Schema),
+			Body:             response.HasBody(),
+			JSON:             response.JSON(),
+			Text:             response.Text(),
+			SSE:              response.SSE,
+			ReconnectableSSE: response.SSE,
 		}
-		mime, media, ok := responseMedia(response)
-		if ok {
-			schema := media.Schema
-			if mime == "text/event-stream" && method == "GET" {
-				schema = media.ItemSchema
-				responseData.SSE = true
-				responseData.ReconnectableSSE = true
-			}
-			responseData.Type = e.goType(schema)
-			responseData.Body = schema != nil
-			responseData.JSON = strings.Contains(mime, "json")
-			responseData.Text = strings.HasPrefix(mime, "text/") || mime == "application/rss+xml"
+		if !responseData.Body {
+			bodylessStatuses = append(bodylessStatuses, strconv.Itoa(response.Status))
 		}
 		responses = append(responses, responseData)
 	}
-	return responses
-}
-
-func responseMedia(response openapi.Response) (string, openapi.MediaType, bool) {
-	for _, mime := range []string{"text/event-stream", "application/json", "application/rss+xml", "text/yaml", "text/plain"} {
-		media, ok := response.Content[mime]
-		if ok {
-			return mime, media, true
-		}
-	}
-	var mimes []string
-	for mime := range response.Content {
-		mimes = append(mimes, mime)
-	}
-	sort.Strings(mimes)
-	if len(mimes) == 0 {
-		return "", openapi.MediaType{}, false
-	}
-	mime := mimes[0]
-	return mime, response.Content[mime], true
-}
-
-func operationAccept(doc *openapi.Document, method string, operation *openapi.Operation) string {
-	if doc.OperationHasSSEResponseMethod(method, operation) {
-		return "text/event-stream"
-	}
-	for _, response := range operation.Responses {
-		resolved := doc.ResolveResponse(response)
-		if _, ok := resolved.Content["application/json"]; ok {
-			return "application/json"
-		}
-	}
-	return "*/*"
-}
-
-func parseStatus(status string) (int, bool) {
-	if len(status) != 3 {
-		return 0, false
-	}
-	value := 0
-	for _, digit := range status {
-		if digit < '0' || digit > '9' {
-			return 0, false
-		}
-		value = value*10 + int(digit-'0')
-	}
-	return value, true
+	return responses, strings.Join(bodylessStatuses, ", ")
 }

@@ -658,7 +658,6 @@ func sseRetryValue(frame []byte) (time.Duration, bool) {
 	Raw *http.Response
 {{range .Responses}}{{if .SSE}}	{{.FieldName}} *SSEStream[{{.Type}}]
 {{else if .Body}}	{{.FieldName}} *{{.Type}}
-{{else}}	{{.FieldName}} bool
 {{end}}{{end}}}
 
 func (c *Client) New{{.ID}}Request(ctx context.Context{{if .HasParams}}, params {{.ParamsType}}{{end}}) (*http.Request, error) {
@@ -704,13 +703,13 @@ func (c *Client) New{{.ID}}Request(ctx context.Context{{if .HasParams}}, params 
 	if err != nil {
 		return nil, fmt.Errorf("build {{.ID}} multipart body: %w", err)
 	}
-{{else if .HasJSONBody}}	var requestBody io.Reader
-{{range .Params}}{{if .Body}}{{if .Required}}	encodedBody, err := json.Marshal(params.{{.FieldName}})
+{{else if .HasJSONBody}}{{if .RequiredJSONBody}}{{range .Params}}{{if .Body}}	encodedBody, err := json.Marshal(params.{{.FieldName}})
 	if err != nil {
 		return nil, fmt.Errorf("encode {{$operation.ID}} JSON body: %w", err)
 	}
-	requestBody = bytes.NewReader(encodedBody)
-{{else}}	if params.{{.FieldName}} != nil {
+	requestBody := bytes.NewReader(encodedBody)
+{{end}}{{end}}{{else}}	var requestBody io.Reader
+{{range .Params}}{{if .Body}}	if params.{{.FieldName}} != nil {
 		encodedBody, err := json.Marshal(params.{{.FieldName}})
 		if err != nil {
 			return nil, fmt.Errorf("encode {{$operation.ID}} JSON body: %w", err)
@@ -723,7 +722,8 @@ func (c *Client) New{{.ID}}Request(ctx context.Context{{if .HasParams}}, params 
 		return nil, fmt.Errorf("build {{.ID}} request: %w", err)
 	}
 	req.Header.Set("Accept", {{printf "%q" .Accept}})
-{{if .HasJSONBody}}	if requestBody != nil {
+{{if and .HasJSONBody .RequiredJSONBody}}	req.Header.Set("Content-Type", "application/json")
+{{else if .HasJSONBody}}	if requestBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 {{else if .MultipartBody}}	req.Header.Set("Content-Type", contentType)
@@ -807,7 +807,7 @@ func (c *Client) {{.ID}}(ctx context.Context{{if .HasParams}}, params {{.ParamsT
 	{{end}}
 	result := &{{.ResponsesType}}{StatusCode: res.StatusCode, Raw: res}
 	switch res.StatusCode {
-{{range .Responses}}	case {{.Status}}:
+{{range .Responses}}{{if .Body}}	case {{.Status}}:
 {{if .SSE}}		lifecycle.stopTimeout()
 		keepLifecycle = true
 {{if .ReconnectableSSE}}		body := newReconnectingSSEBody(
@@ -843,10 +843,10 @@ func (c *Client) {{.ID}}(ctx context.Context{{if .HasParams}}, params {{.ParamsT
 		decoded := {{.Type}}(rawBody)
 		result.{{.FieldName}} = &decoded
 		return result, nil
-{{else}}		_ = res.Body.Close()
-		result.{{.FieldName}} = true
+{{end}}{{end}}{{end}}{{if .BodylessStatuses}}	case {{.BodylessStatuses}}:
+		_ = res.Body.Close()
 		return result, nil
-{{end}}{{end}}	default:
+{{end}}	default:
 		rawBody, readErr := io.ReadAll(io.LimitReader(res.Body, maxDiagnosticBodyBytes))
 		_ = res.Body.Close()
 		if readErr != nil {

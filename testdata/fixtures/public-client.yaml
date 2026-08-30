@@ -76,6 +76,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Problem"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+  /optional-json:
+    post:
+      operationId: patchThing
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateThing"
+      responses:
+        "204":
+          description: Patched
+  /optional-raw:
+    post:
+      operationId: uploadOptionalMedia
+      requestBody:
+        required: false
+        content:
+          application/octet-stream: {}
+      responses:
+        "204":
+          description: Uploaded
   /events:
     get:
       operationId: watchEvents

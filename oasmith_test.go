@@ -227,6 +227,57 @@ func TestGoClientBehavior(t *testing.T) {
 	}
 }
 
+func TestGeneratedClientsUseCanonicalRequestAndResponseShapes(t *testing.T) {
+	t.Parallel()
+
+	fixturePath := filepath.Join("testdata", "fixtures", "public-client.yaml")
+	doc, err := openapi.ParseFile(fixturePath)
+	if err != nil {
+		t.Fatalf("parse public client fixture: %v", err)
+	}
+	goOut := t.TempDir()
+	if err := goemit.EmitClient(doc, goemit.Options{OutDir: goOut, SourcePath: fixturePath}); err != nil {
+		t.Fatalf("emit Go client: %v", err)
+	}
+	goRaw, err := os.ReadFile(filepath.Join(goOut, "client.go"))
+	if err != nil {
+		t.Fatalf("read Go client: %v", err)
+	}
+	goSource := string(goRaw)
+	for _, want := range []string{
+		"requestBody := bytes.NewReader(encodedBody)",
+		"case 401, 403:",
+	} {
+		if !strings.Contains(goSource, want) {
+			t.Fatalf("generated Go client missing %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"Status401 bool",
+		"Status403 bool",
+	} {
+		if strings.Contains(goSource, forbidden) {
+			t.Fatalf("generated Go client contains redundant bodyless response field %q", forbidden)
+		}
+	}
+
+	typeScriptOut := t.TempDir()
+	if err := tsemit.Emit(doc, tsemit.Options{OutDir: typeScriptOut}); err != nil {
+		t.Fatalf("emit TypeScript client: %v", err)
+	}
+	typeScriptRaw, err := os.ReadFile(filepath.Join(typeScriptOut, "api.ts"))
+	if err != nil {
+		t.Fatalf("read TypeScript client: %v", err)
+	}
+	typeScriptSource := string(typeScriptRaw)
+	if !strings.Contains(typeScriptSource, "body: CreateThing\n") {
+		t.Fatal("generated TypeScript client does not expose the canonical body request parameter")
+	}
+	if strings.Contains(typeScriptSource, "createThing: CreateThing\n") {
+		t.Fatal("generated TypeScript client exposes a schema-derived request body parameter")
+	}
+}
+
 func TestGoPackageNameFallsBackToSourceBasename(t *testing.T) {
 	t.Parallel()
 
@@ -549,7 +600,7 @@ components:
 	}
 }
 
-func TestTypeScriptClientRejectsUnsupportedRequestBody(t *testing.T) {
+func TestClientsRejectUnsupportedRequestBody(t *testing.T) {
 	t.Parallel()
 
 	doc, err := openapi.Parse([]byte(`openapi: 3.2.0
@@ -573,9 +624,30 @@ paths:
 	if err != nil {
 		t.Fatalf("parse unsupported request body fixture: %v", err)
 	}
-	err = tsemit.Emit(doc, tsemit.Options{OutDir: t.TempDir()})
-	if err == nil || !strings.Contains(err.Error(), "operation upload has unsupported request body") {
-		t.Fatalf("unsupported request body error = %v", err)
+	for _, testCase := range []struct {
+		name string
+		emit func(string) error
+	}{
+		{
+			name: "Go",
+			emit: func(outDir string) error {
+				return goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: "unsupported.yaml"})
+			},
+		},
+		{
+			name: "TypeScript",
+			emit: func(outDir string) error {
+				return tsemit.Emit(doc, tsemit.Options{OutDir: outDir})
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			err := testCase.emit(t.TempDir())
+			if err == nil || !strings.Contains(err.Error(), "operation upload has unsupported request body") {
+				t.Fatalf("unsupported request body error = %v", err)
+			}
+		})
 	}
 }
 
@@ -1024,7 +1096,7 @@ void describe("TypeScript client queries", () => {
       notify: true,
       label: ["alpha beta", "x&y"],
       xRequestId: "request/1",
-      createThing: { name: "fixture" },
+      body: { name: "fixture" },
     })
     const url = new URL(request.url)
 
@@ -1044,6 +1116,24 @@ void describe("TypeScript client queries", () => {
 
     assert.equal(request.headers.get("Content-Type"), "application/octet-stream")
     assert.equal(await request.text(), "complete-media")
+  })
+
+  void test("omits absent optional request bodies and their content types", async () => {
+    const api = new DefaultApi({ baseURL: "https://example.test" })
+
+    const absentJSON = api.patchThingRequest({})
+    assert.equal(absentJSON.headers.get("Content-Type"), null)
+    assert.equal(await absentJSON.text(), "")
+    const presentJSON = api.patchThingRequest({ body: { name: "patched" } })
+    assert.equal(presentJSON.headers.get("Content-Type"), "application/json")
+    assert.equal(await presentJSON.text(), '{"name":"patched"}')
+
+    const absentRaw = api.uploadOptionalMediaRequest({})
+    assert.equal(absentRaw.headers.get("Content-Type"), null)
+    assert.equal(await absentRaw.text(), "")
+    const presentRaw = api.uploadOptionalMediaRequest({ body: "optional-media" })
+    assert.equal(presentRaw.headers.get("Content-Type"), "application/octet-stream")
+    assert.equal(await presentRaw.text(), "optional-media")
   })
 })
 `
@@ -1183,6 +1273,54 @@ func TestRawRequestBodyAndSharedPathParameters(t *testing.T) {
 	}
 	if response.Status201 == nil || response.Status201.Id != "video_1" {
 		t.Fatalf("typed response = %#v", response.Status201)
+	}
+}
+
+func TestOptionalRequestBodiesAndContentTypes(t *testing.T) {
+	client, err := NewClient(ClientOptions{BaseURL: "https://example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	absentJSON, err := client.NewPatchThingRequest(context.Background(), PatchThingParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if absentJSON.Body != nil || absentJSON.Header.Get("Content-Type") != "" {
+		t.Fatalf("absent JSON body = %#v, Content-Type = %q", absentJSON.Body, absentJSON.Header.Get("Content-Type"))
+	}
+	body := CreateThing{Name: "patched"}
+	presentJSON, err := client.NewPatchThingRequest(context.Background(), PatchThingParams{Body: &body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonBody, err := io.ReadAll(presentJSON.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(jsonBody) != ` + "`" + `{"name":"patched"}` + "`" + ` || presentJSON.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("present JSON body = %q, Content-Type = %q", jsonBody, presentJSON.Header.Get("Content-Type"))
+	}
+
+	absentRaw, err := client.NewUploadOptionalMediaRequest(context.Background(), UploadOptionalMediaParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if absentRaw.Body != nil || absentRaw.Header.Get("Content-Type") != "" {
+		t.Fatalf("absent raw body = %#v, Content-Type = %q", absentRaw.Body, absentRaw.Header.Get("Content-Type"))
+	}
+	presentRaw, err := client.NewUploadOptionalMediaRequest(context.Background(), UploadOptionalMediaParams{
+		Body: strings.NewReader("optional-media"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawBody, err := io.ReadAll(presentRaw.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(rawBody) != "optional-media" || presentRaw.Header.Get("Content-Type") != "application/octet-stream" {
+		t.Fatalf("present raw body = %q, Content-Type = %q", rawBody, presentRaw.Header.Get("Content-Type"))
 	}
 }
 
