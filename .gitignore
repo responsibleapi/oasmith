@@ -11,4 +11,5 @@ test-results/
 *.test
 *.prof
 *.pprof
+dump-*.json
 **/.moon/cache/
