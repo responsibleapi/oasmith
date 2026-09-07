@@ -1,0 +1,41 @@
+toolchains:
+  default: system
+tasks:
+  mod-download:
+    inputs:
+      - go.mod
+      - go.sum
+    script: |-
+      set -euo pipefail
+      go mod download
+    options:
+      cache: true
+  test:
+    deps:
+      - oasmith:mod-download
+    inputs:
+      - ./**/*.go
+      - internal/**/*.gotmpl
+      - go.sum
+    script: |-
+      set -euo pipefail
+      go test ./...
+    options:
+      cache: true
+  lint:
+    deps:
+      - oasmith:mod-download
+    inputs:
+      - ./**/*.go
+      - .golangci.yaml
+      - go.sum
+    script: |-
+      set -euo pipefail
+      gofmt -w .
+      go tool golangci-lint run --allow-serial-runners ./...
+    options:
+      cache: true
+  check:
+    deps:
+      - oasmith:lint
+      - oasmith:test

@@ -1,4 +1,14 @@
 .cache/
-.task/
 node_modules/
 testdata/fixtures/*.openapi.yaml
+
+.task/
+dist/
+build/
+coverage/
+.test-results/
+test-results/
+*.test
+*.prof
+*.pprof
+**/.moon/cache/
