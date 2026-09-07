@@ -146,7 +146,7 @@ by the application, commonly `traceparent`, `tracestate`, and `baggage`.
 [Task](https://taskfile.dev) runs the complete project check.
 
 ```sh
-task check
+pkgx moon run check
 ```
 
 ## License
