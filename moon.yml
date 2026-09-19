@@ -18,10 +18,12 @@ tasks:
       - internal/**/*.gotmpl
       - internal/**/*.json
       - testdata/**/*
+      - go.mod
       - go.sum
+      - .node-version
     script: |-
       set -euo pipefail
-      go test ./...
+      go test -count=1 ./...
     options:
       cache: true
   lint:
@@ -32,11 +34,19 @@ tasks:
       - .golangci.yaml
       - internal/**/*.gotmpl
       - internal/**/*.json
+      - go.mod
       - go.sum
     script: |-
       set -euo pipefail
-      gofmt -w .
-      go tool golangci-lint run --allow-serial-runners ./...
+      if [[ "${CI:-}" == "true" ]]; then
+        test -z "$(gofmt -l .)"
+      else
+        gofmt -w .
+      fi
+      go vet ./...
+      mkdir -p .cache/golangci-lint-tmp
+      GOLANGCI_LINT_CACHE="${GOLANGCI_LINT_CACHE:-$PWD/.cache/golangci-lint}" \
+        TMPDIR="$PWD/.cache/golangci-lint-tmp" go tool golangci-lint run ./...
     options:
       cache: true
   check:
