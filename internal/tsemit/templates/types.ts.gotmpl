@@ -6,8 +6,7 @@
 {{end}}}
 {{else if .Enum}}export type {{.Name}} = {{join .EnumValues " | "}};
 {{else}}export type {{.Name}} = {{.Type}};
-{{end}}
-{{end}}
+{{end}}{{end}}
 
 {{define "duration_string"}}declare const durationBrand: unique symbol;
 

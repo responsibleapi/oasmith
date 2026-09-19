@@ -33,16 +33,6 @@ jobs:
           restore-keys: |
             go-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
             go-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
-      - uses: nubjs/setup-nub@v0
-        id: nub
-        with:
-          nub-version: ^0.7.5
-          node-version-file: .node-version
-          cache: true
-          # These sources pin the tools; this Go project has no JS manifest.
-          cache-dependency-path: |
-            internal/tsemit/tsemit.go
-            oasmith_test.go
       - uses: pkgxdev/setup@v5
       - name: Identify the CI toolchain
         id: toolchain
@@ -52,8 +42,6 @@ jobs:
             {
               go version
               pkgx moon --version
-              nub --version
-              node --version
             } | sha256sum
           )"
           fingerprint="${fingerprint%% *}"

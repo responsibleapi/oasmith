@@ -45,10 +45,8 @@ Every invocation requires:
 JSON input is supported alongside YAML. The document syntax is accepted
 directly, so `.json` and `.yaml` file names work with the same command.
 
-When `nubx` is available, OASmith runs its pinned Oxfmt version in an isolated
-system temporary directory so caller ignore files cannot exclude generated
-code from formatting. No Node project or installed Oxfmt dependency is required.
-Generation still works without `nubx`.
+TypeScript output is written directly from the embedded templates without
+external tools.
 
 Generated clients require an explicit client base URL and use it for every
 operation. OpenAPI server declarations do not change the runtime destination.
@@ -143,8 +141,7 @@ by the application, commonly `traceparent`, `tracestate`, and `baggage`.
 
 ## Develop
 
-[Nub](https://nubjs.com) resolves pinned Oxfmt, Vitest, and TypeScript versions on
-demand using the Node version in `.node-version`.
+[Go](https://go.dev) builds the generator and runs its tests.
 [Moon](https://moonrepo.dev) runs the complete project check.
 
 ```sh
@@ -153,14 +150,12 @@ pkgx moon run check
 
 CI runs the same check with formatting verification and Go vet. It restores Go
 modules, compiler output, and golangci-lint data, saving an updated cache for each
-commit. Nub caching is explicitly enabled and keyed on the Go files that pin its
-tools. Moon restores only its portable `hashes` and `outputs` directories, keyed
-by runner architecture and the resolved Go, Moon, Nub, and Node toolchain.
+commit. Moon restores only its portable `hashes` and `outputs` directories, keyed
+by runner architecture and the resolved Go and Moon toolchain.
 
-Moon hashes Go sources, module files, embedded templates and formatter settings,
-fixtures, golden files, the Node pin, and CI configuration inputs before reusing
-a result. When Moon selects the test task, Go executes its tests so an older Go
-test result cannot hide a changed external tool.
+Moon hashes Go sources, module files, embedded templates, fixtures, golden files,
+and CI configuration inputs before reusing a result. When Moon selects the test
+task, Go executes its tests without reusing its own test-result cache.
 
 ## License
 

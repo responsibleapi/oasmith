@@ -16,11 +16,9 @@ tasks:
     inputs:
       - ./**/*.go
       - internal/**/*.gotmpl
-      - internal/**/*.json
       - testdata/**/*
       - go.mod
       - go.sum
-      - .node-version
     script: |-
       set -euo pipefail
       go test -count=1 ./...
@@ -33,7 +31,6 @@ tasks:
       - ./**/*.go
       - .golangci.yaml
       - internal/**/*.gotmpl
-      - internal/**/*.json
       - go.mod
       - go.sum
     script: |-

@@ -714,7 +714,7 @@ async function runInterceptors(
         const timedResponse = sseResponse.attempt;
         let keepSSE = false;
 {{else}}        const timedResponse = await this.request(this.{{.ID}}Request({{.RequestObjectArgument}}), initOverrides);
-{{end}}        
+{{end}}
         const response = timedResponse.response;
         try {
 {{range .Responses}}        if (response.status === {{.Status}}) {
