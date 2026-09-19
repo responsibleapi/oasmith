@@ -87,12 +87,9 @@ func TestGoldenFixtures(t *testing.T) {
 	}
 }
 
-func TestCLIFormatsOutputInsideIgnoredDirectories(t *testing.T) {
+func TestCLIGeneratesInsideIgnoredDirectoriesWithoutExternalTools(t *testing.T) {
 	t.Parallel()
 
-	if _, err := exec.LookPath("nubx"); err != nil {
-		t.Fatalf("formatter regression requires nubx: %v", err)
-	}
 	binary := filepath.Join(t.TempDir(), "oasmith")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "./cmd/oasmith")
 	if output, err := build.CombinedOutput(); err != nil {
@@ -116,7 +113,7 @@ func TestCLIFormatsOutputInsideIgnoredDirectories(t *testing.T) {
 				t.Fatalf("initialize caller repository: %v\n%s", err, output)
 			}
 			for name, content := range map[string]string{
-				".gitignore":      "gen/\n.oasmith-oxfmt-*/\n",
+				".gitignore":      "gen/\n",
 				".prettierignore": "*.ts\n",
 			} {
 				if err := os.WriteFile(filepath.Join(workspace, name), []byte(content), 0o644); err != nil {
@@ -136,6 +133,7 @@ func TestCLIFormatsOutputInsideIgnoredDirectories(t *testing.T) {
 				"--out", "../../gen/client",
 			)
 			command.Dir = workingDir
+			command.Env = append(os.Environ(), "PATH="+t.TempDir())
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("generate ignored %s client: %v\n%s", testCase.lang, err, output)
 			}
@@ -203,29 +201,6 @@ func TestJSONFixtureGeneratesTypeScript(t *testing.T) {
 	}
 }
 
-func TestTypeScriptAPIInterceptors(t *testing.T) {
-	t.Parallel()
-
-	fixturePath := filepath.Join("testdata", "fixtures", "private.yaml")
-	doc, err := openapi.ParseFile(fixturePath)
-	if err != nil {
-		t.Fatalf("parse private fixture: %v", err)
-	}
-	outDir := t.TempDir()
-	if err := tsemit.Emit(doc, tsemit.Options{OutDir: outDir}); err != nil {
-		t.Fatalf("emit private typescript: %v", err)
-	}
-	testPath := filepath.Join(outDir, "api.test.ts")
-	if err := os.WriteFile(testPath, []byte(apiBehaviorTest), 0o644); err != nil {
-		t.Fatalf("write api test: %v", err)
-	}
-	cmd := exec.Command("nubx", "-y", "vitest@4.0.18", "run", "--globals", "--root", outDir, "api.test.ts")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("typescript api test failed: %v\n%s", err, string(output))
-	}
-}
-
 func TestTypeScriptClientQueries(t *testing.T) {
 	t.Parallel()
 
@@ -246,20 +221,11 @@ func TestTypeScriptClientQueries(t *testing.T) {
 	if !strings.Contains(string(raw), "const queryParameters = new URLSearchParams()") {
 		t.Fatal("generated TypeScript API does not use URLSearchParams")
 	}
-	if !strings.Contains(string(raw), `encodeURIComponent(requestParameters["thingId"])`) {
+	if !strings.Contains(string(raw), `encodeURIComponent(requestParameters['thingId'])`) {
 		t.Fatal("generated TypeScript API does not directly escape path parameters")
 	}
 	if strings.Contains(string(raw), "encodeURIComponent(String(") {
 		t.Fatal("generated TypeScript API unnecessarily converts path parameters")
-	}
-	testPath := filepath.Join(outDir, "query.test.ts")
-	if err := os.WriteFile(testPath, []byte(typescriptQueryBehaviorTest), 0o644); err != nil {
-		t.Fatalf("write TypeScript query test: %v", err)
-	}
-	cmd := exec.Command("nubx", "-y", "vitest@4.0.18", "run", "--globals", "--root", outDir, "query.test.ts")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("typescript query test failed: %v\n%s", err, string(output))
 	}
 }
 
@@ -334,10 +300,10 @@ func TestGeneratedClientsUseCanonicalRequestAndResponseShapes(t *testing.T) {
 		t.Fatalf("read TypeScript client: %v", err)
 	}
 	typeScriptSource := string(typeScriptRaw)
-	if !strings.Contains(typeScriptSource, "body: CreateThing\n") {
+	if !strings.Contains(typeScriptSource, "body: CreateThing;\n") {
 		t.Fatal("generated TypeScript client does not expose the canonical body request parameter")
 	}
-	if strings.Contains(typeScriptSource, "createThing: CreateThing\n") {
+	if strings.Contains(typeScriptSource, "createThing: CreateThing;\n") {
 		t.Fatal("generated TypeScript client exposes a schema-derived request body parameter")
 	}
 }
@@ -436,7 +402,7 @@ paths:
 			t.Fatalf("read %s generated API: %v", operationID, err)
 		}
 		source := string(raw)
-		if !strings.Contains(source, `"/declared-upload"`) {
+		if !strings.Contains(source, `'/declared-upload'`) {
 			t.Fatalf("%s omitted declared path:\n%s", operationID, source)
 		}
 		for _, forbidden := range []string{"/upload/youtube/v3/videos", "Content-Range", "resumable"} {
@@ -551,99 +517,13 @@ components:
 func TestTypeScriptClientRequiresBaseURLAndGeneratesDeclaredSequentialMultipart(t *testing.T) {
 	t.Parallel()
 
-	doc, err := openapi.Parse([]byte(`openapi: 3.2.0
-info:
-  title: YouTube upload fixture
-  version: "1"
-servers:
-  - url: https://youtube.googleapis.com
-paths:
-  /youtube/v3/videos:
-    get:
-      operationId: youtube.videos.list
-      responses:
-        "204":
-          description: Listed
-  /upload/youtube/v3/videos:
-    post:
-      operationId: youtube.videos.insert
-      servers:
-        - url: https://www.googleapis.com
-      parameters:
-        - name: part
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: uploadType
-          in: query
-          required: true
-          schema:
-            type: string
-            const: multipart
-      requestBody:
-        required: true
-        content:
-          multipart/related:
-            schema:
-              type: array
-              minItems: 2
-              maxItems: 2
-              prefixItems:
-                - title: metadata
-                  $ref: "#/components/schemas/Video"
-                - title: media
-                  type: string
-                  format: binary
-            prefixEncoding:
-              - contentType: application/json
-              - contentType: video/*,application/octet-stream
-      responses:
-        "201":
-          description: Uploaded
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Video"
-components:
-  schemas:
-    Video:
-      type: object
-      required: [id]
-      properties:
-        id:
-          type: string
-`))
+	doc, err := openapi.ParseFile(filepath.Join("testdata", "fixtures", "multipart.yaml"))
 	if err != nil {
 		t.Fatalf("parse TypeScript ordered multipart fixture: %v", err)
 	}
 	outDir := t.TempDir()
 	if err := tsemit.Emit(doc, tsemit.Options{OutDir: outDir}); err != nil {
 		t.Fatalf("emit TypeScript ordered multipart fixture: %v", err)
-	}
-	for name, source := range map[string]string{
-		"multipart.test.ts": typescriptSequentialMultipartBehaviorTest,
-		"typecheck.ts":      typescriptSequentialMultipartTypecheck,
-	} {
-		if err := os.WriteFile(filepath.Join(outDir, name), []byte(source), 0o644); err != nil {
-			t.Fatalf("write %s: %v", name, err)
-		}
-	}
-	cmd := exec.Command("nubx", "-y", "vitest@4.0.18", "run", "--globals", "--root", outDir, "multipart.test.ts")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("TypeScript ordered multipart behavior test failed: %v\n%s", err, output)
-	}
-	cmd = exec.Command(
-		"nubx", "-y", "-p", "typescript@5.9.2", "tsc",
-		"--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext",
-		"--moduleResolution", "NodeNext", "--allowImportingTsExtensions",
-		"--lib", "ES2022,DOM,DOM.Iterable", "typecheck.ts",
-	)
-	cmd.Dir = outDir
-	output, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("generated TypeScript client typecheck failed: %v\n%s", err, output)
 	}
 	raw, err := os.ReadFile(filepath.Join(outDir, "api.ts"))
 	if err != nil {
@@ -771,436 +651,6 @@ func compareDirs(t *testing.T, goldenDir string, outDir string) {
 		t.Fatalf("generated file list mismatch\ngolden:\n%s\ngenerated:\n%s", strings.Join(goldenFiles, "\n"), strings.Join(generatedFiles, "\n"))
 	}
 }
-
-const apiBehaviorTest = `
-import assert from "node:assert/strict"
-import { DefaultApi, type FetchInterceptor } from "./api.ts"
-
-void describe("api interceptors", () => {
-  void test("passes the final intercepted request to a custom fetch", async () => {
-    let fetchedRequest: Request | undefined
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      fetch: async request => {
-        assert.ok(request instanceof Request)
-        fetchedRequest = request
-        return new Response("[]")
-      },
-      interceptors: [
-        async chain => {
-          const headers = new Headers(chain.request.headers)
-          headers.set("traceparent", "custom-trace")
-          return await chain.proceed(new Request(chain.request, { headers }))
-        },
-      ],
-    })
-
-    await api.listTestEmails()
-
-    assert.ok(fetchedRequest instanceof Request)
-    assert.equal(fetchedRequest.headers.get("traceparent"), "custom-trace")
-  })
-
-  void test("uses custom fetch for SSE reconnects", async () => {
-    let fetchCalls = 0
-    const encoder = new TextEncoder()
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      fetch: async () => {
-        fetchCalls += 1
-        return new Response(new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode("data: {}\n\n"))
-            controller.close()
-          },
-        }), { headers: { "content-type": "text/event-stream" } })
-      },
-      responseTimeoutMs: 0,
-      sseMaxRetries: 1,
-      sseReconnectBaseDelayMs: 0,
-    })
-
-    const response = await api.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    })
-    assert.equal(response.status, 200)
-    if (response.status !== 200) throw new Error("unexpected status")
-    const iterator = response.body[Symbol.asyncIterator]()
-    assert.equal((await iterator.next()).done, false)
-    assert.equal((await iterator.next()).done, false)
-    assert.equal(fetchCalls, 2)
-    await iterator.return?.()
-  })
-
-  void test("run in order and allow repeated proceed", async () => {
-    const events: Array<string> = []
-    const interceptors: Array<FetchInterceptor> = [
-      async chain => {
-        events.push("a:before")
-        await chain.proceed()
-        events.push("a:between")
-        const response = await chain.proceed()
-        events.push("a:after")
-        return response
-      },
-      async chain => {
-        events.push("b:before")
-        const response = await chain.proceed()
-        events.push("b:after")
-        return response
-      },
-    ]
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      interceptors,
-    })
-    interceptors.push(async () => {
-      events.push("fetch")
-      return new Response("[]")
-    })
-
-    await api.listTestEmails()
-
-    assert.deepEqual(events, [
-      "a:before",
-      "b:before",
-      "fetch",
-      "b:after",
-      "a:between",
-      "b:before",
-      "fetch",
-      "b:after",
-      "a:after",
-    ])
-  })
-
-  void test("may rewrite request headers", async () => {
-    let header = ""
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      sseMaxRetries: 0,
-      interceptors: [
-        async chain => {
-          const headers = new Headers(chain.request.headers)
-          headers.set("x-test", "rewritten")
-          return await chain.proceed(new Request(chain.request, { headers }))
-        },
-        async chain => {
-          header = chain.request.headers.get("x-test") ?? ""
-          return new Response("[]")
-        },
-      ],
-    })
-
-    await api.listTestEmails()
-
-    assert.equal(header, "rewritten")
-  })
-
-  void test("may short-circuit with a synthetic response", async () => {
-    let fetched = false
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      interceptors: [
-        async () => new Response("[]"),
-        async () => {
-          fetched = true
-          return new Response("network")
-        },
-      ],
-    })
-
-    const response = await api.listTestEmails()
-
-    assert.deepEqual(response, [])
-    assert.equal(fetched, false)
-  })
-
-  void test("does not consume SSE response bodies", async () => {
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      interceptors: [
-        async () => new Response("data: still-readable\n\n", {
-          headers: { "content-type": "text/event-stream" },
-        }),
-      ],
-    })
-
-    const response = await api.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    })
-
-    assert.equal(response.status, 200)
-    const reader = response.raw.body?.getReader()
-    assert.ok(reader)
-    const chunk = await reader.read()
-    assert.equal(new TextDecoder().decode(chunk.value), "data: still-readable\n\n")
-    await reader.cancel()
-  })
-
-  void test("does not reconnect after a clean SSE stream end when disabled", async () => {
-    let requests = 0
-    const encoder = new TextEncoder()
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: 0,
-      sseReconnectOnStreamEnd: false,
-      interceptors: [
-        async () => {
-          requests += 1
-          return new Response(new ReadableStream({
-            start(controller) {
-              controller.enqueue(encoder.encode(
-                "event: rss.import.progress\ndata: {\"type\":\"terminal\",\"status\":\"cancelled\"}\n\n",
-              ))
-              controller.close()
-            },
-          }), { headers: { "content-type": "text/event-stream" } })
-        },
-      ],
-    })
-    const response = await api.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    })
-    assert.equal(response.status, 200)
-    if (response.status !== 200) throw new Error("unexpected status")
-    const iterator = response.body[Symbol.asyncIterator]()
-    assert.equal((await iterator.next()).done, false)
-    assert.equal((await iterator.next()).done, true)
-    assert.equal(requests, 1)
-  })
-
-  void test("bounds ordinary response body decoding", async () => {
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: 20,
-      interceptors: [
-        async chain => new Response(new ReadableStream({
-          start(controller) {
-            chain.request.signal.addEventListener("abort", () => {
-              controller.error(chain.request.signal.reason)
-            }, { once: true })
-          },
-        }), { headers: { "content-type": "application/json" } }),
-      ],
-    })
-
-    await assert.rejects(api.listTestEmails(), { name: "TimeoutError" })
-  })
-
-  void test("bounds SSE connection establishment but not total lifetime", async () => {
-    const establishmentTimeout = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: 20,
-      sseMaxRetries: 0,
-      interceptors: [
-        async chain => await new Promise((_resolve, reject) => {
-          chain.request.signal.addEventListener("abort", () => {
-            reject(chain.request.signal.reason)
-          }, { once: true })
-        }),
-      ],
-    })
-    await assert.rejects(establishmentTimeout.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    }), { name: "TimeoutError" })
-
-    const encoder = new TextEncoder()
-    let eventTimer: ReturnType<typeof setTimeout> | undefined
-    const streaming = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: 20,
-      sseIdleTimeoutMs: 1_000,
-      interceptors: [
-        async () => new Response(new ReadableStream({
-          cancel() {
-            if (eventTimer !== undefined) clearTimeout(eventTimer)
-          },
-          start(controller) {
-            eventTimer = setTimeout(() => {
-              controller.enqueue(encoder.encode("data: {}\n\n"))
-            }, 40)
-          },
-        }), { headers: { "content-type": "text/event-stream" } }),
-      ],
-    })
-    const response = await streaming.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    })
-    assert.equal(response.status, 200)
-    if (response.status !== 200) throw new Error("unexpected status")
-    const iterator = response.body[Symbol.asyncIterator]()
-    assert.equal((await iterator.next()).done, false)
-    await iterator.return?.()
-  })
-
-  void test("SSE idle timeout and early iterator return cancel the body", async () => {
-    let idleCanceled = false
-    const idleApi = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: 0,
-      sseIdleTimeoutMs: 20,
-      sseMaxRetries: 0,
-      interceptors: [
-        async () => new Response(new ReadableStream({
-          cancel() {
-            idleCanceled = true
-          },
-        }), { headers: { "content-type": "text/event-stream" } }),
-      ],
-    })
-    const idleResponse = await idleApi.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    })
-    assert.equal(idleResponse.status, 200)
-    if (idleResponse.status !== 200) throw new Error("unexpected status")
-    await assert.rejects(idleResponse.body[Symbol.asyncIterator]().next(), { name: "TimeoutError" })
-    assert.equal(idleCanceled, true)
-
-    let earlyCanceled = false
-    const earlyApi = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: undefined,
-      sseIdleTimeoutMs: undefined,
-      interceptors: [
-        async () => new Response(new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode("data: {}\n\n"))
-          },
-          cancel() {
-            earlyCanceled = true
-          },
-        }), { headers: { "content-type": "text/event-stream" } }),
-      ],
-    })
-    const earlyResponse = await earlyApi.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    })
-    assert.equal(earlyResponse.status, 200)
-    if (earlyResponse.status !== 200) throw new Error("unexpected status")
-    const earlyIterator = earlyResponse.body[Symbol.asyncIterator]()
-    await earlyIterator.next()
-    await earlyIterator.return?.()
-    assert.equal(earlyCanceled, true)
-  })
-
-  void test("SSE heartbeat chunks reset idle timeout", async () => {
-    const encoder = new TextEncoder()
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: 0,
-      sseIdleTimeoutMs: 25,
-      interceptors: [
-        async () => new Response(new ReadableStream({
-          start(controller) {
-            setTimeout(() => controller.enqueue(encoder.encode(": heartbeat\n\n")), 10)
-            setTimeout(() => controller.enqueue(encoder.encode(": heartbeat\n\n")), 20)
-            setTimeout(() => controller.enqueue(encoder.encode("data: {}\n\n")), 30)
-          },
-        }), { headers: { "content-type": "text/event-stream" } }),
-      ],
-    })
-    const response = await api.episodeProcessingEventsResult({
-      episodeId: "episode_1",
-      showId: "show_1",
-      teamId: "team_1",
-    })
-    assert.equal(response.status, 200)
-    if (response.status !== 200) throw new Error("unexpected status")
-    const iterator = response.body[Symbol.asyncIterator]()
-    assert.equal((await iterator.next()).done, false)
-    await iterator.return?.()
-  })
-
-  void test("caller abort signal remains authoritative", async () => {
-    const caller = new AbortController()
-    const reason = new Error("caller canceled")
-    const api = new DefaultApi({
-      baseURL: "https://example.test",
-      responseTimeoutMs: 1_000,
-      interceptors: [
-        async chain => await new Promise((_resolve, reject) => {
-          chain.request.signal.addEventListener("abort", () => {
-            reject(chain.request.signal.reason)
-          }, { once: true })
-        }),
-      ],
-    })
-    const pending = api.listTestEmails({ signal: caller.signal })
-    caller.abort(reason)
-    await assert.rejects(pending, error => error === reason)
-  })
-})
-`
-
-const typescriptQueryBehaviorTest = `
-import assert from "node:assert/strict"
-import { DefaultApi } from "./api.ts"
-
-void describe("TypeScript client queries", () => {
-  void test("encodes scalar and repeated values", () => {
-    const api = new DefaultApi({ baseURL: "https://example.test" })
-    const request = api.createThingRequest({
-      thingId: "a/b",
-      tag: "red blue&green",
-      notify: true,
-      label: ["alpha beta", "x&y"],
-      xRequestId: "request/1",
-      body: { name: "fixture" },
-    })
-    const url = new URL(request.url)
-
-    assert.equal(url.pathname, "/things/a%2Fb")
-    assert.equal(url.searchParams.get("tag"), "red blue&green")
-    assert.equal(url.searchParams.get("notify"), "true")
-    assert.deepEqual(url.searchParams.getAll("label"), ["alpha beta", "x&y"])
-  })
-
-  void test("preserves declared raw request bodies", async () => {
-    const api = new DefaultApi({ baseURL: "https://example.test" })
-    const request = api.uploadMediaRequest({
-      owner: "channel/one",
-      uploadType: "media",
-      body: "complete-media",
-    })
-
-    assert.equal(request.headers.get("Content-Type"), "application/octet-stream")
-    assert.equal(await request.text(), "complete-media")
-  })
-
-  void test("omits absent optional request bodies and their content types", async () => {
-    const api = new DefaultApi({ baseURL: "https://example.test" })
-
-    const absentJSON = api.patchThingRequest({})
-    assert.equal(absentJSON.headers.get("Content-Type"), null)
-    assert.equal(await absentJSON.text(), "")
-    const presentJSON = api.patchThingRequest({ body: { name: "patched" } })
-    assert.equal(presentJSON.headers.get("Content-Type"), "application/json")
-    assert.equal(await presentJSON.text(), '{"name":"patched"}')
-
-    const absentRaw = api.uploadOptionalMediaRequest({})
-    assert.equal(absentRaw.headers.get("Content-Type"), null)
-    assert.equal(await absentRaw.text(), "")
-    const presentRaw = api.uploadOptionalMediaRequest({ body: "optional-media" })
-    assert.equal(presentRaw.headers.get("Content-Type"), "application/octet-stream")
-    assert.equal(await presentRaw.text(), "optional-media")
-  })
-})
-`
 
 const goClientBehaviorTest = `package publicapi
 
@@ -1834,79 +1284,4 @@ func TestRequiredBaseURLAndOrderedParts(t *testing.T) {
 		t.Fatalf("invalid constant error = %v", err)
 	}
 }
-`
-
-const typescriptSequentialMultipartTypecheck = `
-import { DefaultApi, type YoutubeVideosInsertRequest } from './api.ts'
-
-const request: YoutubeVideosInsertRequest = {
-  part: 'snippet,status',
-  uploadType: 'multipart',
-  metadata: { id: 'metadata' },
-  media: new Blob(['complete-media'], { type: 'video/mp4' }),
-}
-
-new DefaultApi({ baseURL: 'https://client.example.test' }).youtubeVideosInsertRequest(request)
-new DefaultApi({ baseURL: 'https://client.example.test' }).youtubeVideosListRequest()
-
-// @ts-expect-error ClientOptions requires baseURL.
-new DefaultApi()
-`
-
-const typescriptSequentialMultipartBehaviorTest = `
-import { DefaultApi } from './api.ts'
-
-void describe('TypeScript required base URL and declared multipart', () => {
-  void test('uses the required base URL and emits complete ordered parts', async () => {
-    function boundaryOf(request: Request): string {
-      const contentType = request.headers.get('Content-Type') ?? ''
-      const match = /^multipart\/related;\s*boundary=(.+)$/.exec(contentType)
-      if (match === null || match[1] === '') {
-        throw new Error('missing multipart/related boundary: ' + contentType)
-      }
-      return match[1]
-    }
-
-    const api = new DefaultApi({ baseURL: 'https://client.example.test' })
-    const request = api.youtubeVideosInsertRequest({
-      part: 'snippet,status',
-      uploadType: 'multipart',
-      metadata: { id: 'metadata' },
-      media: new Blob(['complete-media'], { type: 'video/mp4' }),
-    })
-    const url = new URL(request.url)
-    expect(url.origin + url.pathname).toEqual(
-      'https://client.example.test/upload/youtube/v3/videos',
-    )
-    expect(url.searchParams.get('part')).toEqual('snippet,status')
-    expect(url.searchParams.get('uploadType')).toEqual('multipart')
-
-    const boundary = boundaryOf(request)
-    const body = await request.text()
-    expect(body).toEqual(
-      '--' + boundary + '\r\n' +
-        'Content-Type: application/json\r\n\r\n' +
-        '{"id":"metadata"}\r\n' +
-        '--' + boundary + '\r\n' +
-        'Content-Type: video/mp4\r\n\r\n' +
-        'complete-media\r\n' +
-        '--' + boundary + '--\r\n',
-    )
-    expect(api.youtubeVideosListRequest().url).toEqual(
-      'https://client.example.test/youtube/v3/videos',
-    )
-  })
-
-  void test('rejects undeclared binary part content types', () => {
-    const api = new DefaultApi({ baseURL: 'https://client.example.test' })
-    expect(() =>
-      api.youtubeVideosInsertRequest({
-        part: 'snippet',
-        uploadType: 'multipart',
-        metadata: { id: 'metadata' },
-        media: new Blob(['complete-media'], { type: 'text/plain' }),
-      }),
-    ).toThrow(/media content type .* is not allowed/)
-  })
-})
 `

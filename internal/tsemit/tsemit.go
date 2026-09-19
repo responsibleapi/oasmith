@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,7 +19,7 @@ type Options struct {
 	OutDir string
 }
 
-//go:embed templates/*.gotmpl oxfmt.json
+//go:embed templates/*.gotmpl
 var templateFS embed.FS
 
 // Emit writes TypeScript type and API files for doc.
@@ -45,80 +44,7 @@ func Emit(doc *openapi.Document, opts Options) error {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
-	if err := formatTypescript(files); err != nil {
-		return err
-	}
 	return nil
-}
-
-func formatTypescript(files map[string]string) error {
-	nubx, _ := exec.LookPath("nubx")
-	if nubx == "" {
-		return nil
-	}
-	// Generated clients commonly live under an ignored directory. Oxfmt 0.62
-	// rejects explicitly passed files when its default ignore rules exclude them.
-	// Format temporary copies in the system temporary directory, using it as
-	// the formatter's working directory so caller ignore files cannot exclude
-	// the copies. Then copy the formatted result back to the generated tree.
-	formatDir, err := os.MkdirTemp("", "oasmith-oxfmt-")
-	if err != nil {
-		return fmt.Errorf("create oxfmt directory: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(formatDir) }()
-	config, err := templateFS.ReadFile("oxfmt.json")
-	if err != nil {
-		return fmt.Errorf("read embedded oxfmt config: %w", err)
-	}
-	configPath := filepath.Join(formatDir, "oxfmt.json")
-	if err := os.WriteFile(configPath, config, 0o644); err != nil {
-		return fmt.Errorf("write temporary oxfmt config: %w", err)
-	}
-	absConfigPath, err := filepath.Abs(configPath)
-	if err != nil {
-		return fmt.Errorf("resolve temporary oxfmt config: %w", err)
-	}
-	tempPaths := make(map[string]string, len(files))
-	var paths []string
-	for i, path := range sortedKeys(files) {
-		tempPath := filepath.Join(formatDir, fmt.Sprintf("%d-%s", i, filepath.Base(path)))
-		if err := os.WriteFile(tempPath, []byte(files[path]), 0o644); err != nil {
-			return fmt.Errorf("write temporary typescript output %q: %w", path, err)
-		}
-		tempPaths[path] = tempPath
-		absPath, err := filepath.Abs(tempPath)
-		if err != nil {
-			return fmt.Errorf("resolve typescript output path %q: %w", path, err)
-		}
-		paths = append(paths, absPath)
-	}
-	sort.Strings(paths)
-	args := append([]string{"-y", "oxfmt@0.62.0", "--config", absConfigPath, "--write"}, paths...)
-	cmd := exec.Command(nubx, args...)
-	cmd.Dir = formatDir
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("format typescript output with oxfmt: %w\n%s", err, string(output))
-	}
-	for path, tempPath := range tempPaths {
-		formatted, err := os.ReadFile(tempPath)
-		if err != nil {
-			return fmt.Errorf("read formatted typescript output %q: %w", path, err)
-		}
-		if err := os.WriteFile(path, formatted, 0o644); err != nil {
-			return fmt.Errorf("write formatted typescript output %q: %w", path, err)
-		}
-	}
-	return nil
-}
-
-func sortedKeys(files map[string]string) []string {
-	paths := make([]string, 0, len(files))
-	for path := range files {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-	return paths
 }
 
 func modelsSource(doc *openapi.Document) (string, error) {

@@ -1,0 +1,62 @@
+openapi: 3.2.0
+info:
+  title: YouTube upload fixture
+  version: "1"
+servers:
+  - url: https://youtube.googleapis.com
+paths:
+  /youtube/v3/videos:
+    get:
+      operationId: youtube.videos.list
+      responses:
+        "204":
+          description: Listed
+  /upload/youtube/v3/videos:
+    post:
+      operationId: youtube.videos.insert
+      servers:
+        - url: https://www.googleapis.com
+      parameters:
+        - name: part
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uploadType
+          in: query
+          required: true
+          schema:
+            type: string
+            const: multipart
+      requestBody:
+        required: true
+        content:
+          multipart/related:
+            schema:
+              type: array
+              minItems: 2
+              maxItems: 2
+              prefixItems:
+                - title: metadata
+                  $ref: "#/components/schemas/Video"
+                - title: media
+                  type: string
+                  format: binary
+            prefixEncoding:
+              - contentType: application/json
+              - contentType: video/*,application/octet-stream
+      responses:
+        "201":
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Video"
+components:
+  schemas:
+    Video:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string

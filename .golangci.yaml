@@ -68,10 +68,6 @@ linters:
       - path: ^internal/tsemit/tsemit\.go$
         linters: [gosec]
         text: G301|G306
-      # The formatter subprocess and temporary paths are internally constructed.
-      - path: ^internal/tsemit/tsemit\.go$
-        linters: [gosec]
-        text: G(204|304|703)
       # CLI input paths are intentionally supplied by the caller.
       - path: ^internal/openapi/openapi\.go$
         linters: [gosec]
@@ -81,9 +77,6 @@ linters:
         linters: [gosec]
         text: G(204|304|306)
       - path: ^oasmith_test\.go$
-        linters: [noctx]
-        text: os/exec\.Command must not be called
-      - path: ^internal/tsemit/tsemit\.go$
         linters: [noctx]
         text: os/exec\.Command must not be called
       # Internal error boundaries and test helpers intentionally preserve errors.
