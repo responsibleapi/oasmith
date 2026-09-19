@@ -58,9 +58,10 @@ func formatTypescript(files map[string]string) error {
 	}
 	// Generated clients commonly live under an ignored directory. Oxfmt 0.62
 	// rejects explicitly passed files when its default ignore rules exclude them.
-	// Format temporary copies outside the generated tree, then copy the result
-	// back to keep the generated output formatted without changing ignore rules.
-	formatDir, err := os.MkdirTemp(".", ".oasmith-oxfmt-")
+	// Format temporary copies in the system temporary directory, using it as
+	// the formatter's working directory so caller ignore files cannot exclude
+	// the copies. Then copy the formatted result back to the generated tree.
+	formatDir, err := os.MkdirTemp("", "oasmith-oxfmt-")
 	if err != nil {
 		return fmt.Errorf("create oxfmt directory: %w", err)
 	}
@@ -94,6 +95,7 @@ func formatTypescript(files map[string]string) error {
 	sort.Strings(paths)
 	args := append([]string{"-y", "oxfmt@0.62.0", "--config", absConfigPath, "--write"}, paths...)
 	cmd := exec.Command(nubx, args...)
+	cmd.Dir = formatDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("format typescript output with oxfmt: %w\n%s", err, string(output))
