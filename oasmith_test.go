@@ -87,6 +87,70 @@ func TestGoldenFixtures(t *testing.T) {
 	}
 }
 
+func TestCLIFormatsOutputInsideIgnoredDirectories(t *testing.T) {
+	t.Parallel()
+
+	if _, err := exec.LookPath("nubx"); err != nil {
+		t.Fatalf("formatter regression requires nubx: %v", err)
+	}
+	binary := filepath.Join(t.TempDir(), "oasmith")
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "./cmd/oasmith")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build generator: %v\n%s", err, output)
+	}
+	for _, testCase := range []struct {
+		name    string
+		lang    string
+		fixture string
+		golden  string
+	}{
+		{name: "Go", lang: "go", fixture: "public-client.yaml", golden: "public-client-go"},
+		{name: "TypeScript", lang: "typescript", fixture: "private.yaml", golden: "private-typescript"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			workspace := t.TempDir()
+			init := exec.CommandContext(t.Context(), "git", "init", "-q", workspace)
+			if output, err := init.CombinedOutput(); err != nil {
+				t.Fatalf("initialize caller repository: %v\n%s", err, output)
+			}
+			for name, content := range map[string]string{
+				".gitignore":      "gen/\n.oasmith-oxfmt-*/\n",
+				".prettierignore": "*.ts\n",
+			} {
+				if err := os.WriteFile(filepath.Join(workspace, name), []byte(content), 0o644); err != nil {
+					t.Fatalf("write caller %s: %v", name, err)
+				}
+			}
+			workingDir := filepath.Join(workspace, "packages", "openapi")
+			if err := os.MkdirAll(workingDir, 0o750); err != nil {
+				t.Fatalf("create nested working directory: %v", err)
+			}
+			fixture, err := filepath.Abs(filepath.Join("testdata", "fixtures", testCase.fixture))
+			if err != nil {
+				t.Fatalf("resolve fixture: %v", err)
+			}
+			command := exec.CommandContext(t.Context(), binary,
+				"--openapi", fixture, "--mode", "client", "--lang", testCase.lang,
+				"--out", "../../gen/client",
+			)
+			command.Dir = workingDir
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("generate ignored %s client: %v\n%s", testCase.lang, err, output)
+			}
+			compareDirs(t, filepath.Join("testdata", "golden", testCase.golden), filepath.Join(workspace, "gen", "client"))
+			entries, err := os.ReadDir(workingDir)
+			if err != nil {
+				t.Fatalf("read caller working directory: %v", err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("generator left files in caller working directory: %v", entries)
+			}
+		})
+	}
+}
+
 func TestGoOneOfOutputForConfigDiscriminators(t *testing.T) {
 	t.Parallel()
 

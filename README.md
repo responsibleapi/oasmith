@@ -45,9 +45,10 @@ Every invocation requires:
 JSON input is supported alongside YAML. The document syntax is accepted
 directly, so `.json` and `.yaml` file names work with the same command.
 
-When `nubx` is available, OASmith runs its pinned Oxfmt version through
-`nubx`'s local discovery and registry fallback. No Node project or installed
-Oxfmt dependency is required. Generation still works without `nubx`.
+When `nubx` is available, OASmith runs its pinned Oxfmt version in an isolated
+system temporary directory so caller ignore files cannot exclude generated
+code from formatting. No Node project or installed Oxfmt dependency is required.
+Generation still works without `nubx`.
 
 Generated clients require an explicit client base URL and use it for every
 operation. OpenAPI server declarations do not change the runtime destination.
