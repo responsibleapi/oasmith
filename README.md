@@ -142,12 +142,24 @@ by the application, commonly `traceparent`, `tracestate`, and `baggage`.
 
 ## Develop
 
-[Nub](https://nubjs.com) resolves pinned Oxfmt and Vitest versions on demand.
-[Task](https://taskfile.dev) runs the complete project check.
+[Nub](https://nubjs.com) resolves pinned Oxfmt, Vitest, and TypeScript versions on
+demand using the Node version in `.node-version`.
+[Moon](https://moonrepo.dev) runs the complete project check.
 
 ```sh
-task check
+pkgx moon run check
 ```
+
+CI runs the same check with formatting verification and Go vet. It restores Go
+modules, compiler output, and golangci-lint data, saving an updated cache for each
+commit. Nub caching is explicitly enabled and keyed on the Go files that pin its
+tools. Moon restores only its portable `hashes` and `outputs` directories, keyed
+by runner architecture and the resolved Go, Moon, Nub, and Node toolchain.
+
+Moon hashes Go sources, module files, embedded templates and formatter settings,
+fixtures, golden files, the Node pin, and CI configuration inputs before reusing
+a result. When Moon selects the test task, Go executes its tests so an older Go
+test result cannot hide a changed external tool.
 
 ## License
 
