@@ -16,6 +16,8 @@ tasks:
     inputs:
       - ./**/*.go
       - internal/**/*.gotmpl
+      - internal/**/*.json
+      - testdata/**/*
       - go.sum
     script: |-
       set -euo pipefail
@@ -28,6 +30,8 @@ tasks:
     inputs:
       - ./**/*.go
       - .golangci.yaml
+      - internal/**/*.gotmpl
+      - internal/**/*.json
       - go.sum
     script: |-
       set -euo pipefail
