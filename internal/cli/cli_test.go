@@ -31,7 +31,7 @@ func TestParseRejectsInvalidModeLangPair(t *testing.T) {
 	if err == nil {
 		t.Fatal("Parse invalid mode/lang succeeded")
 	}
-	if !strings.Contains(err.Error(), "valid pairs are types/go, client/go, and client/typescript") {
+	if !strings.Contains(err.Error(), "valid pairs are types/go, client/go, client/typescript, types/rust, and client/rust") {
 		t.Fatalf("Parse error = %q, want valid pair message", err.Error())
 	}
 }

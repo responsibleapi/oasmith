@@ -12,3 +12,7 @@ test-results/
 *.pprof
 dump-*.json
 **/.moon/cache/
+
+/testdata/rust-client/target/
+/testdata/rust-client/src/public/
+/testdata/rust-client/src/models/

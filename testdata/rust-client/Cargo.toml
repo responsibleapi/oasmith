@@ -1,0 +1,11 @@
+[package]
+name = "oasmith-rust-contract-tests"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+tokio = { version = "1", features = ["macros", "rt"] }
+http = "1"

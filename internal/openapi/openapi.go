@@ -102,23 +102,24 @@ type Encoding struct {
 
 // Schema describes the OpenAPI schema subset supported by the generator.
 type Schema struct {
-	Ref              string             `yaml:"$ref"`
-	Title            string             `yaml:"title"`
-	Type             Type               `yaml:"type"`
-	Format           string             `yaml:"format"`
-	Description      string             `yaml:"description"`
-	Enum             []string           `yaml:"enum"`
-	Const            any                `yaml:"const"`
-	Properties       map[string]*Schema `yaml:"properties"`
-	Required         []string           `yaml:"required"`
-	Items            *Schema            `yaml:"items"`
-	PrefixItems      []*Schema          `yaml:"prefixItems"`
-	MinItems         *int               `yaml:"minItems"`
-	MaxItems         *int               `yaml:"maxItems"`
-	OneOf            []*Schema          `yaml:"oneOf"`
-	Discriminator    *Discriminator     `yaml:"discriminator"`
-	ContentMediaType string             `yaml:"contentMediaType"`
-	ContentSchema    *Schema            `yaml:"contentSchema"`
+	AdditionalProperties any                `yaml:"additionalProperties"`
+	Ref                  string             `yaml:"$ref"`
+	Title                string             `yaml:"title"`
+	Type                 Type               `yaml:"type"`
+	Format               string             `yaml:"format"`
+	Description          string             `yaml:"description"`
+	Enum                 []string           `yaml:"enum"`
+	Const                any                `yaml:"const"`
+	Properties           map[string]*Schema `yaml:"properties"`
+	Required             []string           `yaml:"required"`
+	Items                *Schema            `yaml:"items"`
+	PrefixItems          []*Schema          `yaml:"prefixItems"`
+	MinItems             *int               `yaml:"minItems"`
+	MaxItems             *int               `yaml:"maxItems"`
+	OneOf                []*Schema          `yaml:"oneOf"`
+	Discriminator        *Discriminator     `yaml:"discriminator"`
+	ContentMediaType     string             `yaml:"contentMediaType"`
+	ContentSchema        *Schema            `yaml:"contentSchema"`
 }
 
 // Type holds one or more OpenAPI schema type names.
