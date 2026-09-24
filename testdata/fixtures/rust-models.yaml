@@ -1,0 +1,14 @@
+openapi: 3.2.0
+info: {title: Rust type names, version: "1"}
+paths: {}
+components:
+  schemas:
+    String: {type: string}
+    Record:
+      type: object
+      required: [type, nullable, self]
+      properties:
+        type: {type: string}
+        self: {type: string}
+        nullable: {type: [string, "null"]}
+        optional: {type: string}

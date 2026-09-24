@@ -68,6 +68,9 @@ linters:
       - path: ^internal/tsemit/tsemit\.go$
         linters: [gosec]
         text: G301|G306
+      - path: ^internal/rustemit/rustemit\.go$
+        linters: [gosec]
+        text: G301|G306
       # CLI input paths are intentionally supplied by the caller.
       - path: ^internal/openapi/openapi\.go$
         linters: [gosec]

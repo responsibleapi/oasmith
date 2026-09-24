@@ -56,6 +56,31 @@ tasks:
     deps:
       - ~:lint
       - ~:test
+      - ~:test-rust
     inputs: []
     options:
       runInCI: false
+  generate-rust-fixtures:
+    deps: [~:mod-download]
+    inputs:
+      - "@group(sources)"
+      - testdata/fixtures/*.yaml
+    script: |-
+      set -euo pipefail
+      go run ./cmd/oasmith --openapi testdata/fixtures/public-client.yaml --mode client --lang rust --out testdata/rust-client/src/public
+      go run ./cmd/oasmith --openapi testdata/fixtures/rust-models.yaml --mode types --lang rust --out testdata/rust-client/src/models
+    outputs:
+      - testdata/rust-client/src/public/mod.rs
+      - testdata/rust-client/src/models/mod.rs
+    options:
+      cache: true
+  test-rust:
+    deps: [~:generate-rust-fixtures]
+    inputs:
+      - "@group(sources)"
+      - testdata/fixtures/*.yaml
+      - testdata/rust-client/Cargo.*
+      - testdata/rust-client/src/lib.rs
+    command: cargo test --locked --manifest-path testdata/rust-client/Cargo.toml
+    options:
+      cache: true

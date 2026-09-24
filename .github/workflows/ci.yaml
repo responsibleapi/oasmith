@@ -37,6 +37,8 @@ jobs:
       - uses: moonrepo/setup-toolchain@v0
         with:
           moon-version: "2.5.5"
+      - run: rustup toolchain install 1.98.1 --profile minimal
+      - run: rustup default 1.98.1
       - run: mkdir -p "$HOME/.cache/go-build"
       - name: Check affected tasks
         id: ci

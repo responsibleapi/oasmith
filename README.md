@@ -1,6 +1,6 @@
 # OASmith
 
-OASmith generates focused Go and TypeScript code from OpenAPI YAML or JSON
+OASmith generates focused Go, TypeScript, and Rust code from OpenAPI YAML or JSON
 documents.
 It supports focused generation modes without the runtime and configuration
 surface of a general-purpose OpenAPI generator.
@@ -12,6 +12,8 @@ surface of a general-purpose OpenAPI generator.
 | `types` | `go` | Go models |
 | `client` | `go` | Go models and HTTP client |
 | `client` | `typescript` | TypeScript types and HTTP client |
+| `types` | `rust` | Serde models in `mod.rs` |
+| `client` | `rust` | Serde models and a Reqwest client in `mod.rs` |
 
 OASmith handles the OpenAPI schema and operation subset covered by its fixture
 suite, including objects, arrays, enums, `oneOf` discriminators, parameters,
@@ -39,7 +41,7 @@ Every invocation requires:
 
 - `--openapi`: input OpenAPI YAML or JSON document;
 - `--mode`: `types` or `client`;
-- `--lang`: `go` or `typescript`, subject to the supported pairs above;
+- `--lang`: `go`, `typescript`, or `rust`, subject to the supported pairs above;
 - `--out`: generated output directory.
 
 JSON input is supported alongside YAML. The document syntax is accepted
@@ -162,3 +164,22 @@ reports are attached to the workflow, including on failure.
 ## License
 
 [MIT](LICENSE)
+
+## Rust clients
+
+Use `--mode client --lang rust --out src/api`, then `mod api;`. Add `serde` 1
+(with `derive`), `serde_json` 1, and `reqwest` 0.12 (with `json`) to Cargo dependencies.
+Choose the Reqwest TLS features appropriate to your application.
+
+Construct `api::Client::new(http, base_url, bearer_token)` with your configured
+Reqwest client. Operation methods return request builders, so callers own timeouts,
+cancellation, tracing, and bounded body reads. Models and operation-specific
+`Response::decode` enums preserve declared HTTP statuses; undeclared statuses
+retain their original response. SSE responses remain streaming Reqwest responses,
+leaving event framing and cancellation to the caller.
+
+Rust supports JSON and raw request bodies, optional bodies, scalar and repeated
+query parameters, headers, escaped path parameters, enums, nullable values and
+untagged `oneOf` models. Sequential multipart requests currently fail generation
+with an explicit unsupported-body error. Run `moon run oasmith:test-rust` to generate,
+compile, and execute the Rust contract fixtures.
