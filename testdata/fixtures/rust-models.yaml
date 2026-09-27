@@ -12,3 +12,42 @@ components:
         self: {type: string}
         nullable: {type: [string, "null"]}
         optional: {type: string}
+    Connection:
+      oneOf:
+        - $ref: '#/components/schemas/Unconnected'
+        - $ref: '#/components/schemas/Playlist'
+      discriminator:
+        propertyName: kind
+        mapping:
+          none: '#/components/schemas/Unconnected'
+          import: '#/components/schemas/Playlist'
+    Unconnected:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: {type: string, const: none}
+    Playlist:
+      type: object
+      additionalProperties: false
+      required: [kind, source_url]
+      properties:
+        kind: {type: string, const: import}
+        source_url: {type: string}
+    Event:
+      oneOf:
+        - $ref: '#/components/schemas/Connection'
+      discriminator:
+        propertyName: type
+        mapping:
+          connection: '#/components/schemas/Connection'
+    ImplicitEvent:
+      oneOf:
+        - $ref: '#/components/schemas/ImplicitPayload'
+      discriminator: {propertyName: type}
+    ImplicitPayload:
+      type: object
+      required: [type, value]
+      properties:
+        type: {type: string}
+        value: {type: string}
