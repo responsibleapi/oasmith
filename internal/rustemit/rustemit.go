@@ -215,7 +215,7 @@ func (e *emitter) operation(op clientgen.Operation) string {
 	if hasParams {
 		fmt.Fprintf(&body, ", params: %sParams", name)
 	}
-	body.WriteString(") -> reqwest::RequestBuilder {\n")
+	body.WriteString(") -> reqwest_middleware::RequestBuilder {\n")
 	fmt.Fprintf(&body, "        let path = %s.to_owned();\n", strconv.Quote(op.Route.Path))
 	for _, param := range op.Route.Operation.Parameters {
 		typ := e.rustType(param.Schema, name+typeName(param.Name))
@@ -324,7 +324,7 @@ func (e *emitter) response(op clientgen.Operation, name string) {
 const clientPrelude = `
 #[derive(Clone, Debug)]
 pub struct Client {
-    http: reqwest::Client,
+    http: reqwest_middleware::ClientWithMiddleware,
     base_url: String,
     bearer_token: Option<String>,
 }
@@ -336,7 +336,8 @@ fn encode_path(value: &str) -> String {
     }).collect()
 }
 impl Client {
-    pub fn new(http: reqwest::Client, base_url: String, bearer_token: Option<String>) -> Self {
+    /// Every operation uses this client's middleware when its request is sent.
+    pub fn new(http: reqwest_middleware::ClientWithMiddleware, base_url: String, bearer_token: Option<String>) -> Self {
         Self { http, base_url: base_url.trim_end_matches('/').to_owned(), bearer_token }
     }
 `

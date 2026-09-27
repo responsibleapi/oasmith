@@ -5,7 +5,8 @@ mod models;
 mod tests {
     use super::{public::*, models};
     fn client() -> Client {
-        Client::new(reqwest::Client::new(), "http://localhost:1234/".into(), Some("test-key".into()))
+        let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::new()).build();
+        Client::new(http, "http://localhost:1234/".into(), Some("test-key".into()))
     }
     #[test]
     fn encodes_path_repeated_query_headers_and_json() {
@@ -67,5 +68,82 @@ mod tests {
         let _: models::String = "string alias".into();
         assert!(serde_json::from_value::<TerminalResult>(serde_json::json!({"status":"completed","thing":{"id":"a","name":"b"}})).is_ok());
         assert!(serde_json::from_value::<TerminalResult>(serde_json::json!({"status":"unknown","message":"no"})).is_err());
+    }
+
+    #[tokio::test]
+    async fn configured_client_propagates_the_context_active_at_send() {
+        use opentelemetry::{global, Context};
+        use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState, TracerProvider};
+        use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::{InMemorySpanExporter, SdkTracerProvider}};
+        use tracing::{Instrument, instrument::WithSubscriber};
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
+        use tracing_subscriber::prelude::*;
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path, header, body_json}};
+
+        // This is the only test using the process-wide propagator. The provider,
+        // subscriber, HTTP server, and requests all belong to this test.
+        global::set_text_map_propagator(TraceContextPropagator::new());
+        let exporter = InMemorySpanExporter::default();
+        let provider = SdkTracerProvider::builder().with_simple_exporter(exporter.clone()).build();
+        let subscriber = tracing_subscriber::registry()
+            .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("contract-test")));
+
+        let work = async {
+            let server = MockServer::start().await;
+            Mock::given(method("POST")).and(path("/things/a%2Fb"))
+                .and(header("authorization", "Bearer test-key"))
+                .and(header("x-request-id", "request-one"))
+                .and(body_json(serde_json::json!({"name":"Podcast"})))
+                .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({"message":"invalid"})))
+                .expect(1).mount(&server).await;
+            let event = "event: progress\ndata: {}\n\n";
+            Mock::given(method("GET")).and(path("/events"))
+                .and(header("accept", "text/event-stream"))
+                .and(header("authorization", "Bearer test-key"))
+                .respond_with(ResponseTemplate::new(200).set_body_string(event))
+                .expect(1).mount(&server).await;
+
+            let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().no_proxy().build().unwrap())
+                .with(reqwest_tracing::TracingMiddleware::default()).build();
+            let api = Client::new(http, server.uri(), Some("test-key".into()));
+            // Build before entering either span: injection must happen at send,
+            // including through a clone of the shared generated client.
+            let post = api.create_thing(CreateThingParams {
+                thing_id: "a/b".into(), tag: None, notify: false, label: None,
+                x_request_id: "request-one".into(), body: CreateThing { name: "Podcast".into() },
+            });
+            let events = api.clone().watch_events();
+            let first = tracing::info_span!("first operation");
+            let second = tracing::info_span!("second operation");
+            for (span, trace_id, span_id) in [(&first, 1u128, 2u64), (&second, 3u128, 4u64)] {
+                span.set_parent(Context::new().with_remote_span_context(SpanContext::new(
+                    TraceId::from(trace_id), SpanId::from(span_id), TraceFlags::SAMPLED, true,
+                    TraceState::from_key_value([("acme", "state")]).unwrap(),
+                )));
+            }
+            let parents = [first.context().span().span_context().clone(), second.context().span().span_context().clone()];
+            let (post, events) = tokio::join!(post.send().instrument(first), events.send().instrument(second));
+            assert!(matches!(CreateThingResponse::decode(post.unwrap()).await.unwrap(), CreateThingResponse::Status400(_)));
+            let WatchEventsResponse::Status200(stream) = WatchEventsResponse::decode(events.unwrap()).await.unwrap() else { panic!("wrong event variant") };
+            assert_eq!(stream.text().await.unwrap(), event);
+            server.verify().await;
+
+            let requests = server.received_requests().await.unwrap();
+            let spans = exporter.get_finished_spans().unwrap();
+            for (route, parent) in [("/things/a%2Fb", &parents[0]), ("/events", &parents[1])] {
+                let request = requests.iter().find(|r| r.url.path() == route).unwrap();
+                let cx = global::get_text_map_propagator(|p| p.extract(&opentelemetry_http::HeaderExtractor(&request.headers)));
+                let propagated = cx.span().span_context().clone();
+                assert!(propagated.is_valid());
+                assert_eq!(propagated.trace_id(), parent.trace_id());
+                assert_ne!(propagated.span_id(), parent.span_id());
+                assert_eq!(request.headers["tracestate"], "acme=state");
+                let http_span = spans.iter().find(|s| s.span_context.span_id() == propagated.span_id()).unwrap();
+                assert_eq!(http_span.span_kind, opentelemetry::trace::SpanKind::Client);
+                assert_eq!(http_span.parent_span_id, parent.span_id());
+            }
+        }.with_subscriber(subscriber);
+        tokio::time::timeout(std::time::Duration::from_secs(5), work).await.expect("trace propagation did not complete");
+        provider.shutdown().unwrap();
     }
 }

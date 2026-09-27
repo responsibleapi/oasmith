@@ -63,9 +63,10 @@ request-body shapes fail generation.
 
 Generated clients leave OpenTelemetry dependencies and SDK setup to the
 application. Pass an instrumented transport to a Go client or an instrumented
-`fetch` implementation to a TypeScript client. These examples assume the
-application has initialized an OpenTelemetry SDK; `@opentelemetry/api` alone
-uses no-op tracing and propagation implementations.
+`fetch` implementation to a TypeScript client. Rust clients accept a
+middleware-enabled HTTP client at construction.
+These examples assume the application has initialized an OpenTelemetry SDK;
+`@opentelemetry/api` alone uses no-op tracing and propagation implementations.
 
 ### Go
 
@@ -141,6 +142,36 @@ Context propagator must be registered for `propagation.inject` to add
 origins, the API's CORS policy must also allow the propagation headers configured
 by the application, commonly `traceparent`, `tracestate`, and `baggage`.
 
+### Rust
+
+The insertion point is the **HTTP client passed to `api::Client::new`**. Configure
+[`reqwest-tracing`](https://docs.rs/reqwest-tracing/0.5.8/reqwest_tracing/)
+middleware once; every generated operation's `.send()` then propagates the active
+trace automatically:
+
+```rust
+let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().build()?)
+    .with(reqwest_tracing::TracingMiddleware::default())
+    .build();
+
+let api = api::Client::new(http, "https://api.example.com".into(), None);
+
+// Inside the application's existing tracing span:
+let response = api.create_thing(params).send().await?;
+let result = api::CreateThingResponse::decode(response).await?;
+```
+
+For the generated Reqwest 0.12 client, use `reqwest-middleware` 0.4.2 with its
+`json` feature and `reqwest-tracing` 0.5.8 with its `opentelemetry_0_30` feature.
+The application must already have OpenTelemetry 0.30, a `tracing-opentelemetry`
+0.31 subscriber layer, and a registered W3C `TraceContextPropagator`.
+
+The middleware reads the current `tracing` span when the request is sent, creates
+a child HTTP span, and injects its `traceparent` and `tracestate` headers.
+One shared client can therefore serve calls from different traces. Normal async
+context propagation still applies: instrument spawned tasks with
+[`.in_current_span()`](https://docs.rs/tracing/latest/tracing/trait.Instrument.html#method.in_current_span).
+
 ## Develop
 
 [Go](https://go.dev) builds the generator and runs its tests.
@@ -173,15 +204,19 @@ reports are attached to the workflow, including on failure.
 ## Rust clients
 
 Use `--mode client --lang rust --out src/api`, then `mod api;`. Add `serde` 1
-(with `derive`), `serde_json` 1, and `reqwest` 0.12 (with `json`) to Cargo dependencies.
+(with `derive`), `serde_json` 1, `reqwest` 0.12, and `reqwest-middleware` 0.4.2
+(with `json`) to Cargo dependencies.
 Choose the Reqwest TLS features appropriate to your application.
 
 Construct `api::Client::new(http, base_url, bearer_token)` with your configured
-Reqwest client. Operation methods return request builders, so callers own timeouts,
+`reqwest_middleware::ClientWithMiddleware`. For a client without middleware,
+construct it with `reqwest_middleware::ClientBuilder::new(http).build()`.
+Operation methods return `reqwest_middleware::RequestBuilder`, so callers own timeouts,
 cancellation, tracing, and bounded body reads. Models and operation-specific
 `Response::decode` enums preserve declared HTTP statuses; undeclared statuses
 retain their original response. SSE responses remain streaming Reqwest responses,
 leaving event framing and cancellation to the caller.
+See [Rust trace propagation](#rust) to configure automatic propagation once.
 
 Rust supports JSON and raw request bodies, optional bodies, scalar and repeated
 query parameters, headers, escaped path parameters, enums, nullable values and

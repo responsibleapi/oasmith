@@ -7,5 +7,16 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
-tokio = { version = "1", features = ["macros", "rt"] }
+reqwest-middleware = { version = "0.4.2", features = ["json"] }
+tokio = { version = "1", features = ["macros", "rt", "time"] }
 http = "1"
+
+[dev-dependencies]
+opentelemetry = "0.30"
+opentelemetry_sdk = { version = "0.30", features = ["testing"] }
+opentelemetry-http = "0.30"
+reqwest-tracing = { version = "0.5.8", features = ["opentelemetry_0_30"] }
+tracing = "0.1"
+tracing-opentelemetry = "0.31"
+tracing-subscriber = "0.3"
+wiremock = "0.6"
