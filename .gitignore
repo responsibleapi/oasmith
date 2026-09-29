@@ -16,3 +16,6 @@ dump-*.json
 /testdata/rust-client/target/
 /testdata/rust-client/src/public/
 /testdata/rust-client/src/models/
+/testdata/dart-client/.dart_tool/
+/testdata/dart-client/lib/public/
+/testdata/dart-client/lib/models/

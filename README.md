@@ -1,6 +1,6 @@
 # OASmith
 
-OASmith generates focused Go, TypeScript, and Rust code from OpenAPI YAML or JSON
+OASmith generates focused Go, TypeScript, Rust, and Dart code from OpenAPI YAML or JSON
 documents.
 It supports focused generation modes without the runtime and configuration
 surface of a general-purpose OpenAPI generator.
@@ -14,6 +14,8 @@ surface of a general-purpose OpenAPI generator.
 | `client` | `typescript` | TypeScript types and HTTP client |
 | `types` | `rust` | Serde models in `mod.rs` |
 | `client` | `rust` | Serde models and a Reqwest client in `mod.rs` |
+| `types` | `dart` | Dart JSON models in `models.dart` |
+| `client` | `dart` | Dart JSON models and an injectable HTTP client in `models.dart` and `api.dart` |
 
 OASmith handles the OpenAPI schema and operation subset covered by its fixture
 suite, including objects, arrays, enums, `oneOf` discriminators, parameters,
@@ -41,7 +43,7 @@ Every invocation requires:
 
 - `--openapi`: input OpenAPI YAML or JSON document;
 - `--mode`: `types` or `client`;
-- `--lang`: `go`, `typescript`, or `rust`, subject to the supported pairs above;
+- `--lang`: `go`, `typescript`, `rust`, or `dart`, subject to the supported pairs above;
 - `--out`: generated output directory.
 
 JSON input is supported alongside YAML. The document syntax is accepted
@@ -49,6 +51,16 @@ directly, so `.json` and `.yaml` file names work with the same command.
 
 TypeScript output is written directly from the embedded templates without
 external tools.
+
+Dart client output uses `package:http` and accepts an application-owned
+`send(http.BaseRequest)` function. Pass the application's authenticated transport
+to preserve its proxy, tracing, certificate, and cancellation behavior. The
+optional `responseError` callback translates non-success statuses to the
+application's error types. Operation methods encode paths and query parameters,
+decode typed JSON models, and return SSE responses as streams for the caller to
+frame. JSON response reads have a 4 MiB bound.
+The Dart SDK is required when emitting Dart output so OASmith can format the
+generated files.
 
 Generated clients require an explicit client base URL and use it for every
 operation. OpenAPI server declarations do not change the runtime destination.
