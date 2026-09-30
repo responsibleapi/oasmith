@@ -162,6 +162,8 @@ middleware once; every generated operation's `.send()` then propagates the activ
 trace automatically:
 
 ```rust
+use api::Response as _;
+
 let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().build()?)
     .with(reqwest_tracing::TracingMiddleware::default())
     .build();
@@ -169,8 +171,11 @@ let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().bui
 let api = api::Client::new(http, "https://api.example.com".into(), None);
 
 // Inside the application's existing tracing span:
-let response = api.create_thing(params).send().await?;
-let result = api::CreateThingResponse::decode(response).await?;
+match api.create_thing(params).send().await? {
+    api::CreateThingResponse::Status201(thing) => println!("{}", thing.name),
+    api::CreateThingResponse::Status400(problem) => println!("{}", problem.message),
+    response => return Err(response.into_error().await.into()),
+}
 ```
 
 For the generated Reqwest 0.12 client, use `reqwest-middleware` 0.4.2 with its
@@ -223,11 +228,21 @@ Choose the Reqwest TLS features appropriate to your application.
 Construct `api::Client::new(http, base_url, bearer_token)` with your configured
 `reqwest_middleware::ClientWithMiddleware`. For a client without middleware,
 construct it with `reqwest_middleware::ClientBuilder::new(http).build()`.
-Operation methods return `reqwest_middleware::RequestBuilder`, so callers own timeouts,
-cancellation, tracing, and bounded body reads. Models and operation-specific
-`Response::decode` enums preserve declared HTTP statuses; undeclared statuses
-retain their original response. SSE responses remain streaming Reqwest responses,
-leaving event framing and cancellation to the caller.
+Operation methods return `Request<OperationResponse>`. Calling `.send().await?`
+returns the operation-specific response enum, with typed JSON, raw bytes or an
+empty body for every declared status. Match the variants you want to handle;
+`Response::into_error()` explicitly turns another variant into a diagnostic error.
+Import the generated `Response` trait to use `status()` and `into_error()`.
+Undeclared statuses retain the original Reqwest response in `Unexpected`.
+SSE responses also remain unread Reqwest responses, leaving event framing and
+cancellation to the caller.
+
+JSON and raw bodies are buffered up to 4 MiB by default; `.body_limit(bytes)`
+changes the cap. Invalid JSON and oversized bodies return decode/limit errors.
+Use `.send_with(|request| application_send(request))` to retain application
+transport policy while decoding the same typed response. Cancellation should
+wrap the whole send future so it also interrupts body reads. `.into_builder()`
+provides raw HTTP access when needed.
 See [Rust trace propagation](#rust) to configure automatic propagation once.
 
 Rust supports JSON and raw request bodies, optional bodies, scalar and repeated
