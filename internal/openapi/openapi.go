@@ -117,6 +117,8 @@ type Schema struct {
 	MinItems             *int               `yaml:"minItems"`
 	MaxItems             *int               `yaml:"maxItems"`
 	OneOf                []*Schema          `yaml:"oneOf"`
+	AllOf                []*Schema          `yaml:"allOf"`
+	AnyOf                []*Schema          `yaml:"anyOf"`
 	Discriminator        *Discriminator     `yaml:"discriminator"`
 	ContentMediaType     string             `yaml:"contentMediaType"`
 	ContentSchema        *Schema            `yaml:"contentSchema"`
