@@ -5,37 +5,64 @@ mod responses;
 #[cfg(test)]
 mod tests {
     use super::{public::*, models, responses};
-    fn client() -> Client {
-        let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::new()).build();
-        Client::new(http, "http://localhost:1234/".into(), Some("test-key".into()))
+    #[tokio::test]
+    async fn operations_send_encoded_paths_queries_headers_and_json() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let work = async {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({"id":"a", "name":"Podcast"})))
+                .expect(1).mount(&server).await;
+            let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().no_proxy().build().unwrap()).build();
+            let api = Client::new(http, server.uri(), Some("test-key".into()));
+            let result = api.create_thing(CreateThingParams {
+                thing_id: "a/b ?#%".into(), tag: Some("x & y".into()), notify: false,
+                label: Some(vec!["one".into(), "two".into()]), x_request_id: "req-1".into(),
+                body: CreateThing { name: "Podcast".into() },
+            }).await.unwrap();
+            assert!(matches!(result, CreateThingResponse::Status201(_)));
+            server.verify().await;
+            let requests = server.received_requests().await.unwrap();
+            let request = &requests[0];
+            assert_eq!(request.url.path(), "/things/a%2Fb%20%3F%23%25");
+            assert_eq!(request.url.query_pairs().collect::<Vec<_>>(), vec![
+                ("tag".into(), "x & y".into()), ("notify".into(), "false".into()),
+                ("label".into(), "one".into()), ("label".into(), "two".into()),
+            ]);
+            assert_eq!(request.headers["authorization"], "Bearer test-key");
+            assert_eq!(request.headers["x-request-id"], "req-1");
+            assert_eq!(request.headers["content-type"], "application/json");
+            assert_eq!(serde_json::from_slice::<serde_json::Value>(&request.body).unwrap(), serde_json::json!({"name":"Podcast"}));
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), work).await.expect("HTTP input contract did not complete");
     }
-    #[test]
-    fn encodes_path_repeated_query_headers_and_json() {
-        let request = client().create_thing(CreateThingParams {
-            thing_id: "a/b ?#%".into(), tag: Some("x & y".into()), notify: false,
-            label: Some(vec!["one".into(), "two".into()]), x_request_id: "req-1".into(),
-            body: CreateThing { name: "Podcast".into() },
-        }).build().unwrap();
-        assert_eq!(request.url().path(), "/things/a%2Fb%20%3F%23%25");
-        assert_eq!(request.url().query_pairs().collect::<Vec<_>>(), vec![
-            ("tag".into(), "x & y".into()), ("notify".into(), "false".into()),
-            ("label".into(), "one".into()), ("label".into(), "two".into()),
-        ]);
-        assert_eq!(request.headers()["authorization"], "Bearer test-key");
-        assert_eq!(request.headers()["x-request-id"], "req-1");
-        assert_eq!(request.headers()["content-type"], "application/json");
-        let body: serde_json::Value = serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
-        assert_eq!(body, serde_json::json!({"name":"Podcast"}));
-    }
-    #[test]
-    fn optional_bodies_are_absent_and_raw_bytes_are_unchanged() {
-        for request in [client().patch_thing(PatchThingParams {body: None}).build().unwrap(), client().upload_optional_media(UploadOptionalMediaParams {body: None}).build().unwrap()] {
-            assert!(request.body().is_none());
-            assert!(!request.headers().contains_key("content-type"));
-        }
-        let request = client().upload_media(UploadMediaParams {owner: "owner".into(), upload_type: "media".into(), body: vec![0, 255, 10]}).build().unwrap();
-        assert_eq!(request.headers()["content-type"], "application/octet-stream");
-        assert_eq!(request.body().unwrap().as_bytes().unwrap(), &[0, 255, 10]);
+    #[tokio::test]
+    async fn operations_send_optional_bodies_and_raw_bytes() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::path};
+        let work = async {
+            let server = MockServer::start().await;
+            for route in ["/optional-json", "/optional-raw"] {
+                Mock::given(path(route)).respond_with(ResponseTemplate::new(204)).expect(1).mount(&server).await;
+            }
+            Mock::given(path("/uploads/owner"))
+                .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({"id":"a", "name":"Podcast"})))
+                .expect(1).mount(&server).await;
+            let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().no_proxy().build().unwrap()).build();
+            let api = Client::new(http, server.uri(), None);
+            assert!(matches!(api.patch_thing(PatchThingParams {body: None}).await.unwrap(), PatchThingResponse::Status204(())));
+            assert!(matches!(api.upload_optional_media(UploadOptionalMediaParams {body: None}).await.unwrap(), UploadOptionalMediaResponse::Status204(())));
+            assert!(matches!(api.upload_media(UploadMediaParams {owner: "owner".into(), upload_type: "media".into(), body: vec![0, 255, 10]}).await.unwrap(), UploadMediaResponse::Status201(_)));
+            server.verify().await;
+            let requests = server.received_requests().await.unwrap();
+            for request in requests.iter().filter(|r| r.url.path().starts_with("/optional-")) {
+                assert!(request.body.is_empty());
+                assert!(!request.headers.contains_key("content-type"));
+            }
+            let request = requests.iter().find(|r| r.url.path() == "/uploads/owner").unwrap();
+            assert_eq!(request.headers["content-type"], "application/octet-stream");
+            assert_eq!(request.body, &[0, 255, 10]);
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), work).await.expect("HTTP body contract did not complete");
     }
     #[tokio::test]
     async fn generated_operations_decode_http_statuses_and_bodies() {
@@ -50,7 +77,7 @@ mod tests {
                 let result = api.create_thing(CreateThingParams {
                     thing_id: "a".into(), tag: None, notify: false, label: None,
                     x_request_id: "request".into(), body: CreateThing { name: "Podcast".into() },
-                }).send().await.unwrap();
+                }).await.unwrap();
                 assert_eq!(result.status(), status);
                 match (status, result) {
                     (201, CreateThingResponse::Status201(thing)) => assert_eq!(thing.name, "Podcast"),
@@ -63,13 +90,14 @@ mod tests {
                 server.reset().await;
             }
             Mock::given(path("/optional-json")).respond_with(ResponseTemplate::new(204)).expect(1).mount(&server).await;
-            assert!(matches!(api.patch_thing(PatchThingParams { body: None }).send().await.unwrap(), PatchThingResponse::Status204(())));
+            assert!(matches!(api.patch_thing(PatchThingParams { body: None }).await.unwrap(), PatchThingResponse::Status204(())));
             for (body, oversized) in [("invalid JSON", false), (r#"{"id":"a","name":"Podcast"}"#, true)] {
                 Mock::given(path("/things/a")).respond_with(ResponseTemplate::new(201).set_body_string(body)).expect(1).mount(&server).await;
-                let result = api.create_thing(CreateThingParams {
+                let bounded = api.clone().body_limit(if oversized { 8 } else { 1024 });
+                let result = bounded.create_thing(CreateThingParams {
                     thing_id: "a".into(), tag: None, notify: false, label: None,
                     x_request_id: "request".into(), body: CreateThing { name: "Podcast".into() },
-                }).body_limit(if oversized { 8 } else { 1024 }).send().await;
+                }).await;
                 if oversized { assert!(matches!(result, Err(Error::BodyTooLarge { .. }))); }
                 else { assert!(matches!(result, Err(Error::Decode(_)))); }
                 server.verify().await;
@@ -78,7 +106,7 @@ mod tests {
             let payloads = responses::Client::new(reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().no_proxy().build().unwrap()).build(), server.uri(), None);
             for (status, body) in [(200, r#""Podcast""#), (202, "42"), (206, "raw media")] {
                 Mock::given(path("/payload")).respond_with(ResponseTemplate::new(status).set_body_string(body)).expect(1).mount(&server).await;
-                let result = payloads.get_payload().send().await.unwrap();
+                let result = payloads.get_payload().await.unwrap();
                 assert_eq!(responses::Response::status(&result), status);
                 match result {
                     responses::GetPayloadResponse::Status200(text) => assert_eq!(text, "Podcast"),
@@ -91,7 +119,7 @@ mod tests {
             }
             let event = "event: progress\ndata: {}\n\n";
             Mock::given(path("/events")).respond_with(ResponseTemplate::new(200).set_body_string(event)).expect(1).mount(&server).await;
-            let WatchEventsResponse::Status200(stream) = api.watch_events().send().await.unwrap() else { panic!("wrong event variant") };
+            let WatchEventsResponse::Status200(stream) = api.watch_events().await.unwrap() else { panic!("wrong event variant") };
             assert_eq!(stream.text().await.unwrap(), event);
             server.verify().await;
         };
@@ -174,7 +202,8 @@ mod tests {
                 thing_id: "a/b".into(), tag: None, notify: false, label: None,
                 x_request_id: "request-one".into(), body: CreateThing { name: "Podcast".into() },
             });
-            let events = api.clone().watch_events();
+            let cloned = api.clone();
+            let events = cloned.watch_events();
             let first = tracing::info_span!("first operation");
             let second = tracing::info_span!("second operation");
             for (span, trace_id, span_id) in [(&first, 1u128, 2u64), (&second, 3u128, 4u64)] {
@@ -184,7 +213,7 @@ mod tests {
                 )));
             }
             let parents = [first.context().span().span_context().clone(), second.context().span().span_context().clone()];
-            let (post, events) = tokio::join!(post.send_with(|request| async { request.send().await.map_err(Error::from) }).instrument(first), events.send().instrument(second));
+            let (post, events) = tokio::join!(post.instrument(first), events.instrument(second));
             assert!(matches!(post.unwrap(), CreateThingResponse::Status400(_)));
             let WatchEventsResponse::Status200(stream) = events.unwrap() else { panic!("wrong event variant") };
             assert_eq!(stream.text().await.unwrap(), event);

@@ -158,7 +158,7 @@ by the application, commonly `traceparent`, `tracestate`, and `baggage`.
 
 The insertion point is the **HTTP client passed to `api::Client::new`**. Configure
 [`reqwest-tracing`](https://docs.rs/reqwest-tracing/0.5.8/reqwest_tracing/)
-middleware once; every generated operation's `.send()` then propagates the active
+middleware once; every awaited generated operation propagates the active
 trace automatically:
 
 ```rust
@@ -171,7 +171,7 @@ let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().bui
 let api = api::Client::new(http, "https://api.example.com".into(), None);
 
 // Inside the application's existing tracing span:
-match api.create_thing(params).send().await? {
+match api.create_thing(params).await? {
     api::CreateThingResponse::Status201(thing) => println!("{}", thing.name),
     api::CreateThingResponse::Status400(problem) => println!("{}", problem.message),
     response => return Err(response.into_error().await.into()),
@@ -228,8 +228,8 @@ Choose the Reqwest TLS features appropriate to your application.
 Construct `api::Client::new(http, base_url, bearer_token)` with your configured
 `reqwest_middleware::ClientWithMiddleware`. For a client without middleware,
 construct it with `reqwest_middleware::ClientBuilder::new(http).build()`.
-Operation methods return `Request<OperationResponse>`. Calling `.send().await?`
-returns the operation-specific response enum, with typed JSON, raw bytes or an
+Await an operation directly: `api.operation(params).await?` returns its
+operation-specific response enum, with typed JSON, raw bytes or an
 empty body for every declared status. Match the variants you want to handle;
 `Response::into_error()` explicitly turns another variant into a diagnostic error.
 Import the generated `Response` trait to use `status()` and `into_error()`.
@@ -239,10 +239,10 @@ cancellation to the caller.
 
 JSON and raw bodies are buffered up to 4 MiB by default; `.body_limit(bytes)`
 changes the cap. Invalid JSON and oversized bodies return decode/limit errors.
-Use `.send_with(|request| application_send(request))` to retain application
-transport policy while decoding the same typed response. Cancellation should
-wrap the whole send future so it also interrupts body reads. `.into_builder()`
-provides raw HTTP access when needed.
+Configure application transport policy once with `Client::with_transport`.
+Implement the generated `Transport` trait to apply cancellation or diagnostics
+across sending and typed response decoding. Operations still take only their
+parameters and return their response enum directly.
 See [Rust trace propagation](#rust) to configure automatic propagation once.
 
 Rust supports JSON and raw request bodies, optional bodies, scalar and repeated

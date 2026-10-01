@@ -338,12 +338,12 @@ func (e *emitter) operation(op clientgen.Operation) string {
 	name := typeName(op.Route.Operation.OperationID)
 	var params, body strings.Builder
 	params.WriteString("#[derive(Clone, Debug)]\npub struct " + name + "Params {\n")
-	fmt.Fprintf(&body, "    pub fn %s(&self", snake(op.Route.Operation.OperationID))
+	fmt.Fprintf(&body, "    pub async fn %s(&self", snake(op.Route.Operation.OperationID))
 	hasParams := len(op.Route.Operation.Parameters) > 0 || op.RequestBody.JSON != nil || op.RequestBody.Raw != nil
 	if hasParams {
 		fmt.Fprintf(&body, ", params: %sParams", name)
 	}
-	fmt.Fprintf(&body, ") -> Request<%sResponse> {\n", name)
+	fmt.Fprintf(&body, ") -> Result<%sResponse, T::Error> {\n", name)
 	fmt.Fprintf(&body, "        let path = %s.to_owned();\n", strconv.Quote(op.Route.Path))
 	for _, param := range op.Route.Operation.Parameters {
 		typ := e.rustType(param.Schema, name+typeName(param.Name))
@@ -383,7 +383,7 @@ func (e *emitter) operation(op clientgen.Operation) string {
 		e.definitions[name+"Params"] = params.String()
 	}
 	e.response(op, name)
-	body.WriteString("        Request::new(request)\n    }\n")
+	body.WriteString("        self.transport.execute(request, self.body_limit).await\n    }\n")
 	return body.String()
 }
 
@@ -526,41 +526,26 @@ async fn read_body(mut response: reqwest::Response, limit: usize) -> Result<Vec<
     Ok(body)
 }
 
-/// The response type is fixed by the OpenAPI operation, including every declared status.
-#[derive(Debug)]
-pub struct Request<R> {
-    builder: reqwest_middleware::RequestBuilder,
-    limit: usize,
-    response: std::marker::PhantomData<fn() -> R>,
+/// Configure application transport policy once, including sending and response reads.
+pub trait Transport: Sync {
+    type Error: From<Error> + Send;
+    fn execute<R: Response>(&self, request: reqwest_middleware::RequestBuilder, limit: usize)
+        -> impl std::future::Future<Output = Result<R, Self::Error>> + Send;
 }
-impl<R: Response> Request<R> {
-    fn new(builder: reqwest_middleware::RequestBuilder) -> Self {
-        Self { builder, limit: 4 << 20, response: std::marker::PhantomData }
-    }
-    /// Cap buffered JSON and raw bodies. Streaming and unknown responses stay unread.
-    pub fn body_limit(mut self, limit: usize) -> Self { self.limit = limit; self }
-    /// Access the underlying builder for transport configuration or raw HTTP handling.
-    pub fn into_builder(self) -> reqwest_middleware::RequestBuilder { self.builder }
-    pub fn build(self) -> reqwest::Result<reqwest::Request> { self.builder.build() }
-    pub async fn send(self) -> Result<R, Error> {
-        R::decode(self.builder.send().await.map_err(Error::from)?, self.limit).await
-    }
-    /// Keep application transport policy while using the operation's generated decoder.
-    pub async fn send_with<E, F, Fut>(self, send: F) -> Result<R, E>
-    where
-        E: From<Error>,
-        F: FnOnce(reqwest_middleware::RequestBuilder) -> Fut,
-        Fut: std::future::Future<Output = Result<reqwest::Response, E>>,
-    {
-        R::decode(send(self.builder).await?, self.limit).await.map_err(E::from)
+impl Transport for () {
+    type Error = Error;
+    async fn execute<R: Response>(&self, request: reqwest_middleware::RequestBuilder, limit: usize) -> Result<R, Error> {
+        R::decode(request.send().await.map_err(Error::from)?, limit).await
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Client {
+pub struct Client<T = ()> {
     http: reqwest_middleware::ClientWithMiddleware,
     base_url: String,
     bearer_token: Option<String>,
+    body_limit: usize,
+    transport: T,
 }
 fn encode_path(value: &str) -> String {
     value.bytes().map(|byte| {
@@ -570,8 +555,15 @@ fn encode_path(value: &str) -> String {
     }).collect()
 }
 impl Client {
-    /// Every operation uses this client's middleware when its request is sent.
+    /// Operations send and decode directly through this client's middleware.
     pub fn new(http: reqwest_middleware::ClientWithMiddleware, base_url: String, bearer_token: Option<String>) -> Self {
-        Self { http, base_url: base_url.trim_end_matches('/').to_owned(), bearer_token }
+        Self { http, base_url: base_url.trim_end_matches('/').to_owned(), bearer_token, body_limit: 4 << 20, transport: () }
+    }
+}
+impl<T: Transport> Client<T> {
+    /// Cap buffered JSON and raw bodies for every operation. Streaming and unknown responses stay unread.
+    pub fn body_limit(mut self, limit: usize) -> Self { self.body_limit = limit; self }
+    pub fn with_transport<U: Transport>(self, transport: U) -> Client<U> {
+        Client { http: self.http, base_url: self.base_url, bearer_token: self.bearer_token, body_limit: self.body_limit, transport }
     }
 `
