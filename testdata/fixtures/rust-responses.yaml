@@ -1,0 +1,28 @@
+openapi: 3.2.0
+info:
+  title: Rust status response fixture
+  version: "1"
+paths:
+  /payload:
+    get:
+      operationId: getPayload
+      responses:
+        "200":
+          description: JSON text
+          content:
+            application/json:
+              schema:
+                type: string
+        "202":
+          description: JSON number
+          content:
+            application/json:
+              schema:
+                type: integer
+        "206":
+          description: Raw media
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary

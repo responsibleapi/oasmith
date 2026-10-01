@@ -68,9 +68,11 @@ tasks:
       set -euo pipefail
       go run ./cmd/oasmith --openapi testdata/fixtures/public-client.yaml --mode client --lang rust --out testdata/rust-client/src/public
       go run ./cmd/oasmith --openapi testdata/fixtures/rust-models.yaml --mode types --lang rust --out testdata/rust-client/src/models
+      go run ./cmd/oasmith --openapi testdata/fixtures/rust-responses.yaml --mode client --lang rust --out testdata/rust-client/src/responses
     outputs:
       - testdata/rust-client/src/public/mod.rs
       - testdata/rust-client/src/models/mod.rs
+      - testdata/rust-client/src/responses/mod.rs
     options:
       cache: true
   test-rust:
