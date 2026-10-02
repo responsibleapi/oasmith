@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/responsibleapi/oasmith/internal/dartemit"
 	"github.com/responsibleapi/oasmith/internal/goemit"
 	"github.com/responsibleapi/oasmith/internal/openapi"
 	"github.com/responsibleapi/oasmith/internal/rustemit"
@@ -31,8 +30,6 @@ func Run(args []string) error {
 		return err
 	}
 	switch {
-	case opts.Lang == "dart":
-		return dartemit.Emit(doc, dartemit.Options{OutDir: opts.Out}, opts.Mode == "client")
 	case opts.Lang == "rust":
 		return rustemit.Emit(doc, rustemit.Options{OutDir: opts.Out}, opts.Mode == "client")
 	case opts.Mode == "types" && opts.Lang == "go":
@@ -42,7 +39,7 @@ func Run(args []string) error {
 	case opts.Mode == "client" && opts.Lang == "typescript":
 		return tsemit.Emit(doc, tsemit.Options{OutDir: opts.Out})
 	default:
-		return fmt.Errorf("unsupported --mode/--lang pair %q/%q; valid pairs are types/go, client/go, client/typescript, types/rust, client/rust, types/dart, and client/dart", opts.Mode, opts.Lang)
+		return fmt.Errorf("unsupported --mode/--lang pair %q/%q; valid pairs are types/go, client/go, client/typescript, types/rust, and client/rust", opts.Mode, opts.Lang)
 	}
 }
 
@@ -55,15 +52,15 @@ func Parse(args []string) (Options, error) {
 	fs.StringVar(&opts.Lang, "lang", "", "output language")
 	fs.StringVar(&opts.Out, "out", "", "output directory")
 	if err := fs.Parse(args); err != nil {
-		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript|rust|dart> --out <dir>")
+		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript|rust> --out <dir>")
 	}
 	if opts.OpenAPI == "" || opts.Mode == "" || opts.Lang == "" || opts.Out == "" {
-		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript|rust|dart> --out <dir>")
+		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript|rust> --out <dir>")
 	}
-	if ((opts.Mode == "types" || opts.Mode == "client") && (opts.Lang == "rust" || opts.Lang == "dart")) ||
+	if ((opts.Mode == "types" || opts.Mode == "client") && opts.Lang == "rust") ||
 		(opts.Mode == "types" && opts.Lang == "go") ||
 		(opts.Mode == "client" && (opts.Lang == "go" || opts.Lang == "typescript")) {
 		return opts, nil
 	}
-	return Options{}, fmt.Errorf("unsupported --mode/--lang pair %q/%q; valid pairs are types/go, client/go, client/typescript, types/rust, client/rust, types/dart, and client/dart", opts.Mode, opts.Lang)
+	return Options{}, fmt.Errorf("unsupported --mode/--lang pair %q/%q; valid pairs are types/go, client/go, client/typescript, types/rust, and client/rust", opts.Mode, opts.Lang)
 }

@@ -22,9 +22,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 3.13.4
       - name: Restore Go modules, compiler, and linter caches
         id: go-cache
         uses: actions/cache@v6
