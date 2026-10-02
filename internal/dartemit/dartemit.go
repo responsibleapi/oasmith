@@ -2,16 +2,13 @@
 package dartemit
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/responsibleapi/oasmith/internal/clientgen"
@@ -105,7 +102,6 @@ func (e *emitter) writeFiles(outDir, models string, operations []clientgen.Opera
 	if err := os.WriteFile(modelsPath, []byte(models), 0o600); err != nil {
 		return fmt.Errorf("write dart models: %w", err)
 	}
-	paths := []string{modelsPath}
 	if client {
 		api := e.apiSource(operations)
 		if e.err != nil {
@@ -115,14 +111,6 @@ func (e *emitter) writeFiles(outDir, models string, operations []clientgen.Opera
 		if err := os.WriteFile(apiPath, []byte(api), 0o600); err != nil {
 			return fmt.Errorf("write dart client: %w", err)
 		}
-		paths = append(paths, apiPath)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	// #nosec G204 -- The executable is fixed and paths are passed as arguments without a shell.
-	command := exec.CommandContext(ctx, "dart", append([]string{"format", "--output=write"}, paths...)...)
-	if output, err := command.CombinedOutput(); err != nil {
-		return fmt.Errorf("format dart output: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }

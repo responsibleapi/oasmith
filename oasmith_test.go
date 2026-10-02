@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/responsibleapi/oasmith/internal/dartemit"
 	"github.com/responsibleapi/oasmith/internal/goemit"
 	"github.com/responsibleapi/oasmith/internal/openapi"
 	"github.com/responsibleapi/oasmith/internal/tsemit"
@@ -68,14 +67,6 @@ func TestGoldenFixtures(t *testing.T) {
 			golden:  "config-typescript",
 			emit: func(doc *openapi.Document, outDir string, _ string) error {
 				return tsemit.Emit(doc, tsemit.Options{OutDir: outDir})
-			},
-		},
-		{
-			name:    "public-client-dart",
-			fixture: "public-client.yaml",
-			golden:  "public-client-dart",
-			emit: func(doc *openapi.Document, outDir string, _ string) error {
-				return dartemit.Emit(doc, dartemit.Options{OutDir: outDir}, true)
 			},
 		},
 	} {

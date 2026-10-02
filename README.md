@@ -59,8 +59,7 @@ optional `responseError` callback translates non-success statuses to the
 application's error types. Operation methods encode paths and query parameters,
 decode typed JSON models, and return SSE responses as streams for the caller to
 frame. JSON response reads have a 4 MiB bound.
-The Dart SDK is required when emitting Dart output so OASmith can format the
-generated files.
+Dart generation writes files directly without a Dart or Flutter SDK.
 
 Generated clients require an explicit client base URL and use it for every
 operation. OpenAPI server declarations do not change the runtime destination.
