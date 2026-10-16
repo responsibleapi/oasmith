@@ -1,0 +1,30 @@
+package policy_test
+
+import (
+	"encoding/json"
+	"os"
+	"testing"
+
+	api "policy/api"
+	strict "policy/strict"
+)
+
+func TestJSONPolicy(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("cases.json")
+	if err != nil { t.Fatal(err) }
+	var cases []struct { Name string; Input json.RawMessage; Strict bool }
+	if err := json.Unmarshal(raw, &cases); err != nil { t.Fatal(err) }
+	for _, row := range cases {
+		t.Run(row.Name, func(t *testing.T) {
+			t.Parallel()
+			var value api.Policy
+			if err := json.Unmarshal(row.Input, &value); err != nil { t.Fatalf("HTTP JSON: %v", err) }
+			if value.Id != "podcast" || value.Source.Url != "playlist" { t.Fatalf("HTTP JSON lost known fields: %+v", value) }
+			var config strict.Policy
+			err := json.Unmarshal(row.Input, &config)
+			if (err == nil) != row.Strict { t.Fatalf("strict decode: %v; want accepted=%v", err, row.Strict) }
+			if err == nil && (config.Id != "podcast" || config.Source.Url != "playlist") { t.Fatalf("config lost known fields: %+v", config) }
+		})
+	}
+}

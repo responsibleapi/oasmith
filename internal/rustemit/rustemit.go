@@ -16,18 +16,22 @@ import (
 )
 
 // Options configures Rust source emission.
-type Options struct{ OutDir string }
+type Options struct {
+	OutDir     string
+	StrictJSON bool
+}
 
 type emitter struct {
 	schemas     map[string]*openapi.Schema
 	definitions map[string]string
 	serdeModels bool
+	strictJSON  bool
 	err         error
 }
 
 // Emit writes Rust serde models, optionally including a reqwest client.
 func Emit(doc *openapi.Document, opts Options, client bool) error {
-	e := &emitter{schemas: doc.Components.Schemas, definitions: map[string]string{}}
+	e := &emitter{schemas: doc.Components.Schemas, definitions: map[string]string{}, strictJSON: opts.StrictJSON}
 	for _, name := range doc.SchemaNames() {
 		e.define(typeName(name), doc.Components.Schemas[name])
 	}
@@ -235,7 +239,7 @@ func (e *emitter) taggedUnion(out *strings.Builder, name string, schema *openapi
 			variants = append(variants, variant{value, variantName, resolved})
 		}
 	}
-	strict := true
+	strict := e.strictJSON
 	for _, item := range variants {
 		allowed, ok := item.schema.AdditionalProperties.(bool)
 		strict = strict && ok && !allowed
@@ -313,7 +317,7 @@ func (e *emitter) fields(out *strings.Builder, name string, schema *openapi.Sche
 func (e *emitter) object(out *strings.Builder, name string, schema *openapi.Schema) {
 	e.serdeModels = true
 	out.WriteString("#[derive(Clone, Debug, Serialize, Deserialize)]\n")
-	if allowed, ok := schema.AdditionalProperties.(bool); ok && !allowed {
+	if allowed, ok := schema.AdditionalProperties.(bool); e.strictJSON && ok && !allowed {
 		out.WriteString("#[serde(deny_unknown_fields)]\n")
 	}
 	out.WriteString("pub struct " + name + " {\n")

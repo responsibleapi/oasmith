@@ -24,14 +24,14 @@ func TestParseRejectsInvalidModeLangPair(t *testing.T) {
 
 	_, err := cli.Parse([]string{
 		"--openapi", "doc.yaml",
-		"--mode", "types",
+		"--mode", "invalid",
 		"--lang", "typescript",
 		"--out", "out",
 	})
 	if err == nil {
 		t.Fatal("Parse invalid mode/lang succeeded")
 	}
-	if !strings.Contains(err.Error(), "valid pairs are types/go, client/go, client/typescript, types/rust, client/rust, types/dart, and client/dart") {
+	if !strings.Contains(err.Error(), "valid modes are types and client; valid languages are go, typescript, rust, and dart") {
 		t.Fatalf("Parse error = %q, want valid pair message", err.Error())
 	}
 }

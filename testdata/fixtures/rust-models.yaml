@@ -6,6 +6,7 @@ components:
     String: {type: string}
     Record:
       type: object
+      additionalProperties: false
       required: [type, nullable, self]
       properties:
         type: {type: string}

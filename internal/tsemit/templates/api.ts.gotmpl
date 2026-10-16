@@ -1,6 +1,7 @@
 {{define "api.ts"}}{{if .Imports}}import type {
 {{range .Imports}}    {{.}},
 {{end}}} from './types.ts';
+{{end}}{{if .Strict}}import { decodeJSON } from './types.ts';
 {{end}}
 export type FetchInterceptor = (chain: FetchInterceptorChain) => Promise<Response>;
 
@@ -738,7 +739,7 @@ async function runInterceptors(
             );
             keepSSE = true;
             return { status: {{.Status}}, body: parseEventStream<{{.Type}}>(raw, undefined), raw };
-{{else if .JSON}}            const body: {{.Type}} = await response.json();
+{{else if .JSON}}            const body: {{.Type}} = {{if .Schema}}decodeJSON(await response.json(), {{.Schema}}) as {{.Type}}{{else}}await response.json(){{end}};
             return { status: {{.Status}}, body, raw: response };
 {{else if .Text}}            const body: {{.Type}} = await response.text();
             return { status: {{.Status}}, body, raw: response };

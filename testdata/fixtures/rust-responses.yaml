@@ -3,6 +3,18 @@ info:
   title: Rust status response fixture
   version: "1"
 paths:
+  /catalog:
+    get:
+      operationId: listPodcasts
+      responses:
+        "200":
+          description: Podcasts known to an older client
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Podcast'
   /payload:
     get:
       operationId: getPayload
@@ -26,3 +38,33 @@ paths:
               schema:
                 type: string
                 format: binary
+components:
+  schemas:
+    Podcast:
+      type: object
+      additionalProperties: false
+      required: [id, title, youtube]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        youtube:
+          $ref: '#/components/schemas/YouTube'
+    YouTube:
+      oneOf:
+        - $ref: '#/components/schemas/LinkedYouTube'
+      discriminator:
+        propertyName: status
+        mapping:
+          linked: '#/components/schemas/LinkedYouTube'
+    LinkedYouTube:
+      type: object
+      additionalProperties: false
+      required: [status, source]
+      properties:
+        status: {type: string, const: linked}
+        source:
+          type: object
+          additionalProperties: false
+          required: [url]
+          properties:
+            url: {type: string}

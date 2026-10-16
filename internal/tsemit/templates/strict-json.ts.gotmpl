@@ -1,0 +1,74 @@
+{{define "strict-json.ts"}}
+type JSONSchema = {
+    ref?: string;
+    type?: string[];
+    const?: unknown;
+    enum?: unknown[];
+    additionalProperties?: boolean | JSONSchema;
+    properties?: Record<string, JSONSchema>;
+    required?: string[];
+    items?: JSONSchema;
+    oneOf?: JSONSchema[];
+    discriminator?: { propertyName: string; mapping: Record<string, string> };
+};
+
+const jsonSchemas: Record<string, JSONSchema> = {{.SchemasJSON}};
+
+export function decodeJSON(value: unknown, schema: JSONSchema, path = '$'): unknown {
+    if (schema.ref !== undefined) {
+        const target = jsonSchemas[schema.ref];
+        if (target === undefined) throw new Error(`unknown JSON schema ${schema.ref}`);
+        return decodeJSON(value, target, path);
+    }
+    if (schema.oneOf !== undefined) {
+        const discriminator = schema.discriminator;
+        if (discriminator !== undefined && Object.keys(discriminator.mapping).length > 0) {
+            if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${path}: expected object`);
+            const tag = (value as Record<string, unknown>)[discriminator.propertyName];
+            if (typeof tag !== 'string' || !Object.hasOwn(discriminator.mapping, tag)) throw new Error(`${path}: unknown discriminator ${String(tag)}`);
+            return decodeJSON(value, { ref: discriminator.mapping[tag] }, path);
+        }
+        let matches = 0;
+        for (const variant of schema.oneOf) {
+            try { decodeJSON(value, variant, path); matches++; } catch { /* try next variant */ }
+        }
+        if (matches !== 1) throw new Error(`${path}: expected exactly one JSON variant`);
+        return value;
+    }
+    if (schema.type !== undefined) {
+        const valid = schema.type.some(type => {
+            switch (type) {
+            case 'null': return value === null;
+            case 'array': return Array.isArray(value);
+            case 'object': return value !== null && typeof value === 'object' && !Array.isArray(value);
+            case 'integer': return typeof value === 'number' && Number.isInteger(value);
+            case 'number': return typeof value === 'number' && Number.isFinite(value);
+            default: return typeof value === type;
+            }
+        });
+        if (!valid) throw new Error(`${path}: expected ${schema.type.join(' or ')}`);
+    }
+    if (Object.hasOwn(schema, 'const') && value !== schema.const) throw new Error(`${path}: invalid constant`);
+    if (schema.enum !== undefined && !schema.enum.includes(value)) throw new Error(`${path}: unknown enum value`);
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        const object = value as Record<string, unknown>;
+        const properties = schema.properties ?? {};
+        for (const key of schema.required ?? []) {
+            if (!Object.hasOwn(object, key)) throw new Error(`${path}.${key}: missing required field`);
+        }
+        for (const [key, item] of Object.entries(object)) {
+            if (Object.hasOwn(properties, key)) decodeJSON(item, properties[key], `${path}.${key}`);
+            else if (schema.additionalProperties === false) throw new Error(`${path}.${key}: unexpected JSON field`);
+            else if (typeof schema.additionalProperties === 'object') decodeJSON(item, schema.additionalProperties, `${path}.${key}`);
+        }
+    }
+    if (Array.isArray(value) && schema.items !== undefined) {
+        for (const [index, item] of value.entries()) decodeJSON(item, schema.items, `${path}[${index}]`);
+    }
+    return value;
+}
+{{range .Models}}
+export function decode{{.Name}}(value: unknown): {{.Name}} {
+    return decodeJSON(value, { ref: '{{.Name}}' }) as {{.Name}};
+}
+{{end}}{{end}}

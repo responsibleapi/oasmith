@@ -127,7 +127,7 @@ func (e *emitter) writeObject(out *strings.Builder, name string, schema *openapi
 	}
 	out.WriteString("});\n")
 	fmt.Fprintf(out, "  factory %s.fromJson(Object? raw) {\n    final map = expectPublicMap(raw);\n", name)
-	if strict, ok := schema.AdditionalProperties.(bool); ok && !strict {
+	if allowed, ok := schema.AdditionalProperties.(bool); e.strict && ok && !allowed {
 		out.WriteString("    for (final key in map.keys) {\n      if (!const <String>{")
 		for _, key := range keys {
 			fmt.Fprintf(out, "%s,", quote(key))

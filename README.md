@@ -12,6 +12,7 @@ surface of a general-purpose OpenAPI generator.
 | `types` | `go` | Go models |
 | `client` | `go` | Go models and HTTP client |
 | `client` | `typescript` | TypeScript types and HTTP client |
+| `types` | `typescript` | TypeScript types |
 | `types` | `rust` | Serde models in `mod.rs` |
 | `client` | `rust` | Serde models and a Reqwest client in `mod.rs` |
 | `types` | `dart` | Dart JSON models in `models.dart` |
@@ -43,11 +44,30 @@ Every invocation requires:
 
 - `--openapi`: input OpenAPI YAML or JSON document;
 - `--mode`: `types` or `client`;
-- `--lang`: `go`, `typescript`, `rust`, or `dart`, subject to the supported pairs above;
+- `--lang`: `go`, `typescript`, `rust`, or `dart`;
 - `--out`: generated output directory.
 
 JSON input is supported alongside YAML. The document syntax is accepted
 directly, so `.json` and `.yaml` file names work with the same command.
+
+Generated JSON models default to HTTP compatibility: extra object fields do not
+break decoding when a server adds response data. For configuration, add `--strict`
+to reject unknown fields in objects declared with `additionalProperties: false`,
+including nested objects, array items and tagged union payloads. Explicitly open
+objects remain open. The flag applies to every language in both generation modes;
+it is independent of emitting HTTP operations. It controls unknown-field handling,
+not full JSON Schema validation.
+
+```sh
+oasmith --openapi public.yaml --mode client --lang rust --out src/api
+oasmith --openapi config.yaml --mode types --lang rust --strict --out src/config
+```
+
+Strict Go models enforce this through `UnmarshalJSON`; Rust uses Serde; Dart
+uses `fromJson`. Strict TypeScript output exports `decode<Type>(value)` for
+configuration and validates ordinary JSON responses in generated HTTP operations.
+TypeScript interfaces alone cannot validate parsed JSON; use the generated decoder
+when loading configuration.
 
 TypeScript output is written directly from the embedded templates without
 external tools.
@@ -223,6 +243,13 @@ Use `--mode client --lang rust --out src/api`, then `mod api;`. Add `serde` 1
 (with `derive`), `serde_json` 1, `reqwest` 0.12, and `reqwest-middleware` 0.4.2
 (with `json`) to Cargo dependencies.
 Choose the Reqwest TLS features appropriate to your application.
+
+Rust JSON models ignore unknown object fields by default, including nested
+objects and tagged union payloads. This lets an older HTTP client read responses
+after an API adds fields. Required fields, field types, enum values and
+discriminator values still have to match the generated contract.
+
+For configuration, add `--strict` as described above.
 
 Construct `api::Client::new(http, base_url, bearer_token)` with your configured
 `reqwest_middleware::ClientWithMiddleware`. For a client without middleware,

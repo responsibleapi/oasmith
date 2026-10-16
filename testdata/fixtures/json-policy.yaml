@@ -1,0 +1,51 @@
+openapi: 3.2.0
+info: {title: JSON decoding policy, version: "1"}
+paths:
+  /policy:
+    get:
+      operationId: getPolicy
+      responses:
+        "200":
+          description: Current configuration or an older client's HTTP payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+components:
+  schemas:
+    Policy:
+      type: object
+      additionalProperties: false
+      required: [id, source, connection, history, metadata]
+      properties:
+        id: {type: string}
+        source:
+          $ref: '#/components/schemas/Source'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/Source'
+        connection:
+          $ref: '#/components/schemas/Connection'
+        metadata: {type: object, additionalProperties: true}
+    Source:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url: {type: string}
+    Connection:
+      oneOf:
+        - $ref: '#/components/schemas/Linked'
+      discriminator:
+        propertyName: kind
+        mapping:
+          linked: '#/components/schemas/Linked'
+    Linked:
+      type: object
+      additionalProperties: false
+      required: [kind, source]
+      properties:
+        kind: {type: string, const: linked}
+        source:
+          $ref: '#/components/schemas/Source'

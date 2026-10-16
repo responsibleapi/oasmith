@@ -16,19 +16,23 @@ import (
 )
 
 // Options configures Dart output emission.
-type Options struct{ OutDir string }
+type Options struct {
+	OutDir string
+	Strict bool
+}
 
 type emitter struct {
 	doc         *openapi.Document
 	names       map[*openapi.Schema]string
 	definitions map[string]*openapi.Schema
 	implemented map[string][]string
+	strict      bool
 	err         error
 }
 
 // Emit writes Dart models and, in client mode, operation methods for doc.
 func Emit(doc *openapi.Document, opts Options, client bool) error {
-	e := &emitter{doc: doc, names: map[*openapi.Schema]string{}, definitions: map[string]*openapi.Schema{}, implemented: map[string][]string{}}
+	e := &emitter{doc: doc, names: map[*openapi.Schema]string{}, definitions: map[string]*openapi.Schema{}, implemented: map[string][]string{}, strict: opts.Strict}
 	for _, name := range doc.SchemaNames() {
 		if name == "string" || name == "String" {
 			continue
