@@ -155,9 +155,51 @@ mod tests {
         assert!(value.nullable.is_none());
         assert_eq!(value.self_value, "me");
         assert!(value.optional.is_none());
+        assert!(serde_json::from_value::<models::Record>(serde_json::json!({"type":"podcast", "nullable":null, "self":"me", "typo":true})).is_err());
         let _: models::String = "string alias".into();
         assert!(serde_json::from_value::<TerminalResult>(serde_json::json!({"status":"completed","thing":{"id":"a","name":"b"}})).is_ok());
         assert!(serde_json::from_value::<TerminalResult>(serde_json::json!({"status":"unknown","message":"no"})).is_err());
+    }
+
+    #[tokio::test]
+    async fn older_clients_accept_additive_response_fields_but_reject_broken_payloads() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+        let work = async {
+            let server = MockServer::start().await;
+            let http = reqwest_middleware::ClientBuilder::new(reqwest::Client::builder().no_proxy().build().unwrap()).build();
+            let api = responses::Client::new(http, server.uri(), None);
+            // The generated schema deliberately predates these response fields.
+            for body in [
+                r#"[{"id":"podcast","title":"Podcast","apple_podcasts_url":"https://podcasts.apple.com/podcast/id123","youtube":{"status":"linked","source":{"url":"playlist"}}}]"#,
+                r#"[{"id":"podcast","title":"Podcast","youtube":{"status":"linked","last_checked_at":1700000000000,"source":{"url":"playlist"}}}]"#,
+                r#"[{"id":"podcast","title":"Podcast","youtube":{"status":"linked","source":{"url":"playlist","metadata":{"new_field":[1,null,true]}}}}]"#,
+            ] {
+                Mock::given(method("GET")).and(path("/catalog"))
+                    .respond_with(ResponseTemplate::new(200).set_body_string(body)).expect(1).mount(&server).await;
+                let responses::ListPodcastsResponse::Status200(podcasts) = api.list_podcasts().await.unwrap() else { panic!("catalog did not load") };
+                assert_eq!(podcasts.len(), 1);
+                assert_eq!(podcasts[0].id, "podcast");
+                assert_eq!(podcasts[0].title, "Podcast");
+                let responses::YouTube::Linked { source } = &podcasts[0].youtube;
+                assert_eq!(source.url, "playlist");
+                server.verify().await;
+                server.reset().await;
+            }
+            for body in [
+                r#"[{"title":"Podcast","youtube":{"status":"linked","source":{"url":"playlist"}}}]"#,
+                r#"[{"id":"podcast","title":42,"youtube":{"status":"linked","source":{"url":"playlist"}}}]"#,
+                r#"[{"id":"podcast","title":"Podcast","youtube":{"status":"unknown","source":{"url":"playlist"}}}]"#,
+                r#"[{"id":"podcast","title":"Podcast","youtube":{"status":"linked"}}]"#,
+                r#"[{"id":"podcast","title":"Podcast","youtube":{"status":"linked","source":{"url":false}}}]"#,
+            ] {
+                Mock::given(method("GET")).and(path("/catalog"))
+                    .respond_with(ResponseTemplate::new(200).set_body_string(body)).expect(1).mount(&server).await;
+                assert!(matches!(api.list_podcasts().await, Err(responses::Error::Decode(_))), "accepted {body}");
+                server.verify().await;
+                server.reset().await;
+            }
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), work).await.expect("response compatibility contract did not complete");
     }
 
     #[tokio::test]

@@ -19,9 +19,10 @@ import (
 type Options struct {
 	OutDir     string
 	SourcePath string
+	Strict     bool
 }
 
-type emitter struct{}
+type emitter struct{ strict bool }
 
 //go:embed templates/*.gotmpl
 var templateFS embed.FS
@@ -31,7 +32,7 @@ func Emit(doc *openapi.Document, opts Options) error {
 	if err := os.MkdirAll(opts.OutDir, 0o755); err != nil {
 		return fmt.Errorf("create go output directory %q: %w", opts.OutDir, err)
 	}
-	raw, err := executeTemplate("models.go", goModelsTemplateData(doc, opts.SourcePath))
+	raw, err := executeTemplate("models.go", goModelsTemplateData(doc, opts))
 	if err != nil {
 		return err
 	}
@@ -128,6 +129,7 @@ type goEnumValueData struct {
 type goObjectData struct {
 	TypeName string
 	Fields   []goFieldData
+	Strict   bool
 }
 
 type goFieldData struct {
@@ -155,11 +157,11 @@ type goOneOfMappingData struct {
 	FieldName string
 }
 
-func goModelsTemplateData(doc *openapi.Document, sourcePath string) goModelsData {
-	e := emitter{}
+func goModelsTemplateData(doc *openapi.Document, opts Options) goModelsData {
+	e := emitter{strict: opts.Strict}
 	data := goModelsData{
-		PackageName:          packageName(doc, sourcePath),
-		Imports:              goImports(doc),
+		PackageName:          packageName(doc, opts.SourcePath),
+		Imports:              goImports(doc, opts.Strict),
 		NeedsDurationHelpers: needsDurationHelpers(doc),
 	}
 	for _, name := range doc.SchemaNames() {
@@ -224,6 +226,9 @@ func (e *emitter) objectTemplateData(name string, schema *openapi.Schema) *goObj
 	keys := schema.SortedPropertyNames()
 	data := goObjectData{
 		TypeName: typeName,
+	}
+	if allowed, ok := schema.AdditionalProperties.(bool); e.strict && ok && !allowed {
+		data.Strict = true
 	}
 	for _, propName := range keys {
 		prop := schema.Properties[propName]
@@ -330,8 +335,17 @@ func needsJSONHelpers(doc *openapi.Document) bool {
 	return false
 }
 
-func goImports(doc *openapi.Document) []string {
+func goImports(doc *openapi.Document, strict bool) []string {
 	imports := map[string]bool{}
+	if strict {
+		for _, schema := range doc.Components.Schemas {
+			if allowed, ok := schema.AdditionalProperties.(bool); schema.IsObject() && ok && !allowed {
+				imports["bytes"] = true
+				imports["encoding/json"] = true
+				imports["fmt"] = true
+			}
+		}
+	}
 	if needsJSONHelpers(doc) {
 		imports["encoding/json"] = true
 		imports["fmt"] = true

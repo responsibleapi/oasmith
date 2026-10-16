@@ -1,0 +1,7 @@
+[
+  {"name":"known fields and open metadata","strict":true,"input":{"id":"podcast","source":{"url":"playlist"},"history":[{"url":"playlist"}],"connection":{"kind":"linked","source":{"url":"playlist"}},"metadata":{"new_field":{"nested":true}}}},
+  {"name":"added root field","strict":false,"input":{"id":"podcast","apple_podcasts_url":"https://podcasts.apple.com/podcast/id123","source":{"url":"playlist"},"history":[],"connection":{"kind":"linked","source":{"url":"playlist"}},"metadata":{}}},
+  {"name":"added nested field","strict":false,"input":{"id":"podcast","source":{"url":"playlist","new_field":true},"history":[],"connection":{"kind":"linked","source":{"url":"playlist"}},"metadata":{}}},
+  {"name":"added array item field","strict":false,"input":{"id":"podcast","source":{"url":"playlist"},"history":[{"url":"playlist","new_field":null}],"connection":{"kind":"linked","source":{"url":"playlist"}},"metadata":{}}},
+  {"name":"added tagged payload field","strict":false,"input":{"id":"podcast","source":{"url":"playlist"},"history":[],"connection":{"kind":"linked","source":{"url":"playlist"},"new_field":{"nested":[]}},"metadata":{}}}
+]

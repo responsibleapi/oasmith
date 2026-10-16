@@ -1,16 +1,78 @@
 package oasmith_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/responsibleapi/oasmith/internal/cli"
 	"github.com/responsibleapi/oasmith/internal/goemit"
 	"github.com/responsibleapi/oasmith/internal/openapi"
 	"github.com/responsibleapi/oasmith/internal/tsemit"
 )
+
+func TestJSONDecodingPolicies(t *testing.T) {
+	t.Parallel()
+	for _, row := range []struct {
+		language, fixture, program string
+		command                    []string
+	}{
+		{language: "go", fixture: "go-test.txt", program: "policy_test.go", command: []string{"go", "test", "-count=1", "./..."}},
+		{language: "dart", fixture: "dart-check.dart", program: "check.dart", command: []string{"dart", "run", "check.dart"}},
+	} {
+		t.Run(row.language, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithTimeout(t.Context(), 9*time.Second)
+			defer cancel()
+			out := t.TempDir()
+			root, err := os.OpenRoot(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := root.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			for _, policy := range []string{"api", "strict"} {
+				args := []string{"--openapi", "testdata/fixtures/json-policy.yaml", "--mode", "types", "--lang", row.language, "--out", filepath.Join(out, policy)}
+				if policy == "strict" {
+					args = append(args, "--strict")
+				}
+				if err := cli.Run(args); err != nil {
+					t.Fatalf("generate %s %s: %v", row.language, policy, err)
+				}
+			}
+			files := map[string]string{"cases.json": "testdata/fixtures/json-policy-cases.json", row.program: filepath.Join("testdata/json-policy", row.fixture)}
+			if err := root.WriteFile("go.mod", []byte("module policy\n\ngo 1.27.0\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			writeJSONPolicyFixtures(t, root, files)
+			command := exec.CommandContext(ctx, row.command[0], row.command[1:]...)
+			command.Dir = out
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("%s JSON policy contract: %v\n%s", row.language, err, output)
+			}
+		})
+	}
+}
+
+func writeJSONPolicyFixtures(t *testing.T, root *os.Root, files map[string]string) {
+	t.Helper()
+	for target, source := range files {
+		raw, err := os.ReadFile(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := root.WriteFile(target, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 func TestGoldenFixtures(t *testing.T) {
 	t.Parallel()

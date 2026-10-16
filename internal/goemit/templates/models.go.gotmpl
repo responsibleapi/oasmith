@@ -26,7 +26,19 @@ const (
 {{define "object"}}type {{.TypeName}} struct {
 {{range .Fields}}	{{.Name}} {{.Type}} `json:"{{.JSONName}}{{.JSONOmit}}"`
 {{end}}}
-{{end}}
+{{if .Strict}}
+func (dst *{{.TypeName}}) UnmarshalJSON(data []byte) error {
+	type wire {{.TypeName}}
+	var decoded wire
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return fmt.Errorf("decode {{.TypeName}}: %w", err)
+	}
+	*dst = {{.TypeName}}(decoded)
+	return nil
+}
+{{end}}{{end}}
 
 {{define "one_of"}}// {{.TypeName}} is generated from an OpenAPI oneOf schema.
 {{range .Refs}}// oneOf variant: {{.TypeName}}

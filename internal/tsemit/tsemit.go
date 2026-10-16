@@ -16,7 +16,9 @@ import (
 
 // Options configures TypeScript client emission.
 type Options struct {
-	OutDir string
+	OutDir    string
+	Strict    bool
+	TypesOnly bool
 }
 
 //go:embed templates/*.gotmpl
@@ -31,13 +33,22 @@ func Emit(doc *openapi.Document, opts Options) error {
 	if err != nil {
 		return err
 	}
-	api, err := apiSource(doc)
-	if err != nil {
-		return err
+	if opts.Strict {
+		decoders, err := strictJSONSource(doc)
+		if err != nil {
+			return err
+		}
+		models += decoders
 	}
 	files := map[string]string{
-		filepath.Join(opts.OutDir, "api.ts"):   api,
 		filepath.Join(opts.OutDir, "types.ts"): models,
+	}
+	if !opts.TypesOnly {
+		api, err := apiSource(doc, opts.Strict)
+		if err != nil {
+			return err
+		}
+		files[filepath.Join(opts.OutDir, "api.ts")] = api
 	}
 	for path, source := range files {
 		if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
@@ -113,13 +124,14 @@ func modelsTemplateData(doc *openapi.Document) modelsData {
 	return data
 }
 
-func apiSource(doc *openapi.Document) (string, error) {
+func apiSource(doc *openapi.Document, strict bool) (string, error) {
 	operations, err := clientgen.Analyze(doc)
 	if err != nil {
 		return "", fmt.Errorf("analyze client operations: %w", err)
 	}
 	data := apiData{
 		Imports: modelImports(doc, operations),
+		Strict:  strict,
 	}
 	for _, analyzed := range operations {
 		params := operationParams(analyzed)
@@ -130,6 +142,17 @@ func apiSource(doc *openapi.Document) (string, error) {
 			})
 		}
 		operation := operationTemplateData(analyzed)
+		if strict {
+			for index, response := range analyzed.Responses {
+				if response.JSON() {
+					schema, err := jsonSchemaSource(response.Schema)
+					if err != nil {
+						return "", err
+					}
+					operation.Responses[index].Schema = schema
+				}
+			}
+		}
 		if operation.HasSSE {
 			data.HasSSE = true
 		}
@@ -142,6 +165,7 @@ func apiSource(doc *openapi.Document) (string, error) {
 }
 
 type apiData struct {
+	Strict            bool
 	Imports           []string
 	HasSSE            bool
 	HasMultipartBody  bool
@@ -263,6 +287,7 @@ type opParam struct {
 }
 
 type opResponse struct {
+	Schema string
 	Status int
 	Type   string
 	Body   bool
