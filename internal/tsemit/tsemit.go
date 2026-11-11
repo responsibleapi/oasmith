@@ -516,6 +516,22 @@ func tsType(schema *openapi.Schema) string {
 	if schema == nil {
 		return "unknown"
 	}
+	for _, kind := range schema.Type {
+		if kind != "null" {
+			continue
+		}
+		nonNull := *schema
+		nonNull.Type = nil
+		for _, candidate := range schema.Type {
+			if candidate != "null" {
+				nonNull.Type = append(nonNull.Type, candidate)
+			}
+		}
+		if len(nonNull.Type) == 0 {
+			return "null"
+		}
+		return tsType(&nonNull) + " | null"
+	}
 	if schema.Ref != "" {
 		refName := openapi.RefName(schema.Ref)
 		if refName == "string" {
