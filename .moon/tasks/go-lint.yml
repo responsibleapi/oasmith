@@ -47,7 +47,9 @@ tasks:
         console.log("Go lint policy: "+source+"; "+patterns.length+" Git-ignored paths excluded");
         try{
           const format=["fmt","--config",rendered];
-          if(process.env.GO_LINT_FORMATTERS)format.push("--enable",process.env.GO_LINT_FORMATTERS);
+          if(process.env.GO_LINT_FORMATTERS){
+            execFileSync("go",["tool","golangci-lint",...format,"--enable",process.env.GO_LINT_FORMATTERS],{stdio:"inherit"});
+          }
           execFileSync("go",["tool","golangci-lint",...format],{stdio:"inherit"});
           const run=["run","--config",rendered,"--allow-parallel-runners"];
           if(process.env.GO_LINT_BUILD_TAGS)run.push("--build-tags",process.env.GO_LINT_BUILD_TAGS);
@@ -55,7 +57,7 @@ tasks:
           execFileSync("go",["tool","golangci-lint",...run],{stdio:"inherit"});
         }catch(error){process.exitCode=typeof error.status==="number"?error.status:1;}
         finally{rmSync(rendered,{force:true});}
-    inputs: ['**/*.go', go.mod, go.sum, mise.toml, mise.lock, .golangci.yaml, .gitignore, .moon/tasks/go-lint.yml]
+    inputs: ['**/*.go', go.mod, go.sum, mise.toml, mise.lock, .golangci.yaml, .gitignore, .moon/tasks/go-lint.yml, '$GO_LINT_FORMATTERS']
     options:
       cache: true
       shell: false
