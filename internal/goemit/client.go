@@ -80,7 +80,11 @@ type goResponseData struct {
 	ReconnectableSSE bool
 }
 
-func goClientTemplateData(doc *openapi.Document, sourcePath string, operations []clientgen.Operation) goClientData {
+func goClientTemplateData(
+	doc *openapi.Document,
+	sourcePath string,
+	operations []clientgen.Operation,
+) goClientData {
 	e := emitter{}
 	data := goClientData{
 		PackageName: packageName(doc, sourcePath),
@@ -97,7 +101,10 @@ func goClientTemplateData(doc *openapi.Document, sourcePath string, operations [
 	return data
 }
 
-func (e *emitter) operationTemplateData(doc *openapi.Document, analyzed clientgen.Operation) goOperationData {
+func (e *emitter) operationTemplateData(
+	doc *openapi.Document,
+	analyzed clientgen.Operation,
+) goOperationData {
 	route := analyzed.Route
 	op := route.Operation
 	data := goOperationData{
@@ -109,27 +116,7 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, analyzed clientge
 		Accept:        analyzed.Accept,
 	}
 	for _, param := range op.Parameters {
-		paramType := e.goType(param.Schema)
-		constant, hasConstant := "", false
-		if param.Schema != nil {
-			constant, hasConstant = param.Schema.Const.(string)
-		}
-		if !param.Required {
-			paramType = optionalType(paramType)
-		}
-		data.Params = append(data.Params, goOperationParamData{
-			FieldName: openapi.ExportName(param.Name),
-			WireName:  param.Name,
-			Type:      paramType,
-			Const:     constant,
-			HasConst:  hasConstant,
-			Required:  param.Required,
-			Path:      param.In == "path",
-			Query:     param.In == "query",
-			Header:    param.In == "header",
-			Slice:     param.Schema != nil && param.Schema.IsArray(),
-			NonEmpty:  param.Required && schemaIsString(doc, param.Schema),
-		})
+		data.Params = append(data.Params, e.parameterTemplateData(doc, param))
 		data.HasQueryParams = data.HasQueryParams || param.In == "query"
 	}
 	if analyzed.RequestBody.Multipart != nil {
@@ -169,7 +156,9 @@ func (e *emitter) operationTemplateData(doc *openapi.Document, analyzed clientge
 	return data
 }
 
-func (e *emitter) multipartBodyTemplateData(analyzed *clientgen.MultipartBody) *goMultipartBodyData {
+func (e *emitter) multipartBodyTemplateData(
+	analyzed *clientgen.MultipartBody,
+) *goMultipartBodyData {
 	body := &goMultipartBodyData{MediaType: analyzed.MediaType}
 	for index, analyzedPart := range analyzed.Parts {
 		fieldName := openapi.ExportName(analyzedPart.Title)
@@ -224,4 +213,31 @@ func (e *emitter) operationResponses(analyzed []clientgen.Response) ([]goRespons
 		responses = append(responses, responseData)
 	}
 	return responses, strings.Join(bodylessStatuses, ", ")
+}
+
+func (e *emitter) parameterTemplateData(
+	doc *openapi.Document,
+	param openapi.Parameter,
+) goOperationParamData {
+	paramType := e.goType(param.Schema)
+	constant, hasConstant := "", false
+	if param.Schema != nil {
+		constant, hasConstant = param.Schema.Const.(string)
+	}
+	if !param.Required {
+		paramType = optionalType(paramType)
+	}
+	return goOperationParamData{
+		FieldName: openapi.ExportName(param.Name),
+		WireName:  param.Name,
+		Type:      paramType,
+		Const:     constant,
+		HasConst:  hasConstant,
+		Required:  param.Required,
+		Path:      param.In == "path",
+		Query:     param.In == "query",
+		Header:    param.In == "header",
+		Slice:     param.Schema != nil && param.Schema.IsArray(),
+		NonEmpty:  param.Required && schemaIsString(doc, param.Schema),
+	}
 }

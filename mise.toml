@@ -1,0 +1,6 @@
+# Standalone generator tools. Mise provisions tools; Moon owns all tasks.
+[tools]
+go = "1.27.4"
+node = "26.5.0"
+aube = "2.5.1"
+"aqua:moonrepo/moon" = "2.5.6"

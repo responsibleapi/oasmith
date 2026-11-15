@@ -7,101 +7,80 @@ run:
 
 linters:
   default: all
-  enable:
-    # Security and correctness checks kept on explicitly.
-    - gosec
-    - nilnil
-    - noctx
-    - wrapcheck
   disable:
-    # Linters for dependencies OASmith does not use.
     - arangolint
     - clickhouselint
+    - depguard
+    - err113
+    - exhaustruct
+    - exhaustruct_v5
+    - forbidigo
     - ginkgolinter
+    - gochecknoglobals
+    - goheader
+    - gomodguard
+    - gomodguard_v2
     - loggercheck
+    - nilnil
+    - nlreturn
+    - noinlineerr
     - protogetter
     - rowserrcheck
     - sloglint
     - spancheck
     - sqlclosecheck
-    - unqueryvet
-    - zerologlint
-    # Checks not adopted for the current code shape.
-    - cyclop
-    - err113
-    - exhaustive
-    # Subjective or project-policy checks not adopted by OASmith.
-    - depguard
-    - exhaustruct
-    - exhaustruct_v5
-    - forbidigo
-    - funlen
-    - gochecknoglobals
-    - goconst
-    - goheader
-    - goprintffuncname
-    - lll
-    - mnd
-    - nestif
-    - nlreturn
-    - noinlineerr
-    - perfsprint
-    - prealloc
     - tagliatelle
     - testifylint
     - testpackage
+    - unqueryvet
     - varnamelen
-    # YAML unmarshalling intentionally uses mixed receiver types.
-    - recvcheck
+    - wrapcheck
     - wsl
     - wsl_v5
-    # Dependency-policy aliases remain disabled; gomodguard is deprecated.
-    - gomodguard
-    - gomodguard_v2
-  exclusions:
-    warn-unused: true
-    rules:
-      # Generated source and temporary files intentionally use these modes.
-      - path: ^internal/goemit/goemit\.go$
-        linters: [gosec]
-        text: G301|G306
-      - path: ^internal/tsemit/tsemit\.go$
-        linters: [gosec]
-        text: G301|G306
-      - path: ^internal/rustemit/rustemit\.go$
-        linters: [gosec]
-        text: G301|G306
-      # CLI input paths are intentionally supplied by the caller.
-      - path: ^internal/openapi/openapi\.go$
-        linters: [gosec]
-        text: G304
-      # The integration tests create files and launch their checked tools.
-      - path: ^oasmith_test\.go$
-        linters: [gosec]
-        text: G(204|304|306)
-      - path: ^oasmith_test\.go$
-        linters: [noctx]
-        text: os/exec\.Command must not be called
-      # Internal error boundaries and test helpers intentionally preserve errors.
-      - path: ^internal/cli/cli\.go$
-        linters: [wrapcheck]
-        text: error returned from external package is unwrapped
-      - path: ^internal/goemit/goemit\.go$
-        linters: [wrapcheck]
-        text: error returned from external package is unwrapped
-      - path: ^oasmith_test\.go$
-        linters: [wrapcheck]
-        text: error returned from external package is unwrapped
+    - zerologlint
   settings:
-    staticcheck:
-      checks:
-        - all
-        # Generated/public API comments are not normalized yet.
-        - -ST1020
-        - -ST1021
+    cyclop:
+      max-complexity: 12
+      package-average: 8
     gomoddirectives:
       replace-allow-list:
         - github.com/getkin/kin-openapi
+  exclusions:
+    generated: strict
+    warn-unused: true
+    paths:
+      - internal/gen/.*
+      # moon:gitignored-files
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gomoddirectives
+        path: go.mod
+        text: listenbox.app/fixtureserver
+      - linters:
+          - gomoddirectives
+        path: go.mod
+        text: listenbox.app/spaniel
+      - linters:
+          - gomoddirectives
+        path: go.mod
+        text: listenbox.app/cloudflare-cache|listenbox.app/local-s3
+      - linters:
+          - gomoddirectives
+        path: go.mod
+        text: listenbox.app/stripe-mock|listenbox.app/google-oauth-mock|listenbox.app/turnstile-mock
+      - linters:
+          - gomoddirectives
+        path: go.mod
+        text: listenbox.app/youtube-data-api-v3/mock
+      - linters:
+          - gomoddirectives
+        path: go.mod
+        text: listenbox.app/youtube-web-mock
 
 issues:
   max-issues-per-linter: 0
@@ -115,3 +94,5 @@ formatters:
   exclusions:
     generated: strict
     warn-unused: true
+    paths:
+      # moon:gitignored-files

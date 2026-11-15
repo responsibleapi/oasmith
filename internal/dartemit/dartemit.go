@@ -30,11 +30,26 @@ type emitter struct {
 	err         error
 }
 
+const (
+	discoveryPassLimit     = 1000
+	dartString             = "String"
+	stringSchema           = "string"
+	nullableObject         = "Object?"
+	generatedDirectoryMode = 0o750
+	generatedFileMode      = 0o600
+)
+
 // Emit writes Dart models and, in client mode, operation methods for doc.
 func Emit(doc *openapi.Document, opts Options, client bool) error {
-	e := &emitter{doc: doc, names: map[*openapi.Schema]string{}, definitions: map[string]*openapi.Schema{}, implemented: map[string][]string{}, strict: opts.Strict}
+	e := &emitter{
+		doc:         doc,
+		names:       map[*openapi.Schema]string{},
+		definitions: map[string]*openapi.Schema{},
+		implemented: map[string][]string{},
+		strict:      opts.Strict,
+	}
 	for _, name := range doc.SchemaNames() {
-		if name == "string" || name == "String" {
+		if name == stringSchema || name == dartString {
 			continue
 		}
 		e.register(name, doc.Components.Schemas[name])
@@ -79,7 +94,7 @@ func (e *emitter) discoverOperations(client bool) ([]clientgen.Operation, error)
 
 func (e *emitter) discoverAll() error {
 	// Type discovery also registers inline object and union definitions.
-	for i := range 1000 {
+	for i := range discoveryPassLimit {
 		before := len(e.definitions)
 		names := e.sortedNames()
 		for _, name := range names {
@@ -91,19 +106,26 @@ func (e *emitter) discoverAll() error {
 		if len(e.definitions) == before {
 			return nil
 		}
-		if i == 999 {
-			return fmt.Errorf("dart schema discovery did not converge")
+		if i == discoveryPassLimit-1 {
+			return fmt.Errorf(
+				"dart schema discovery did not converge after %d passes",
+				discoveryPassLimit,
+			)
 		}
 	}
 	return nil
 }
 
-func (e *emitter) writeFiles(outDir, models string, operations []clientgen.Operation, client bool) error {
-	if err := os.MkdirAll(outDir, 0o750); err != nil {
+func (e *emitter) writeFiles(
+	outDir, models string,
+	operations []clientgen.Operation,
+	client bool,
+) error {
+	if err := os.MkdirAll(outDir, generatedDirectoryMode); err != nil {
 		return fmt.Errorf("create dart output directory %q: %w", outDir, err)
 	}
 	modelsPath := filepath.Join(outDir, "models.dart")
-	if err := os.WriteFile(modelsPath, []byte(models), 0o600); err != nil {
+	if err := os.WriteFile(modelsPath, []byte(models), generatedFileMode); err != nil {
 		return fmt.Errorf("write dart models: %w", err)
 	}
 	if client {
@@ -112,7 +134,7 @@ func (e *emitter) writeFiles(outDir, models string, operations []clientgen.Opera
 			return e.err
 		}
 		apiPath := filepath.Join(outDir, "api.dart")
-		if err := os.WriteFile(apiPath, []byte(api), 0o600); err != nil {
+		if err := os.WriteFile(apiPath, []byte(api), generatedFileMode); err != nil {
 			return fmt.Errorf("write dart client: %w", err)
 		}
 	}
@@ -137,7 +159,7 @@ func (e *emitter) register(name string, schema *openapi.Schema) string {
 	}
 	name = typeName(name)
 	if name == "" {
-		e.err = fmt.Errorf("dart schema has empty type name")
+		e.err = fmt.Errorf("dart schema name %q is empty", name)
 		return "Object"
 	}
 	if prior := e.definitions[name]; prior != nil && prior != schema {
@@ -170,26 +192,29 @@ func (e *emitter) resolve(schema *openapi.Schema) *openapi.Schema {
 func (e *emitter) dartType(schema *openapi.Schema, hint string) string {
 	if schema == nil {
 		e.err = fmt.Errorf("dart missing schema for %s", hint)
-		return "Object?"
+		return nullableObject
 	}
 	if schema.Ref != "" {
 		name := openapi.RefName(schema.Ref)
 		if e.doc.Components.Schemas[name] == nil {
 			e.err = fmt.Errorf("dart unresolved schema reference %q", schema.Ref)
 		}
-		if name == "string" || name == "String" {
-			return "String"
+		if name == stringSchema || name == dartString {
+			return dartString
 		}
 		return typeName(name)
 	}
 	if len(schema.AllOf) > 0 || len(schema.AnyOf) > 0 {
 		e.err = fmt.Errorf("dart schema %s uses unsupported allOf/anyOf composition", hint)
-		return "Object?"
+		return nullableObject
 	}
-	nullable := schema.Type.Has("null")
+	return e.dartValueType(schema, hint)
+}
+
+func (e *emitter) dartValueType(schema *openapi.Schema, hint string) string {
 	var base string
 	switch {
-	case len(schema.OneOf) > 0 || len(schema.Enum) > 0 || (schema.IsObject() && len(schema.Properties) > 0):
+	case isModelSchema(schema):
 		base = e.register(hint, schema)
 	case schema.Type.Has("array"):
 		if schema.Items == nil {
@@ -197,8 +222,8 @@ func (e *emitter) dartType(schema *openapi.Schema, hint string) string {
 			return "List<Object?>"
 		}
 		base = "List<" + e.dartType(schema.Items, hint+"Item") + ">"
-	case schema.Type.Has("string"):
-		base = "String"
+	case schema.Type.Has(stringSchema):
+		base = dartString
 	case schema.Type.Has("integer"):
 		base = "int"
 	case schema.Type.Has("number"):
@@ -208,12 +233,12 @@ func (e *emitter) dartType(schema *openapi.Schema, hint string) string {
 	case schema.Type.Has("object"):
 		base = "Map<String, Object?>"
 	case schema.Type.Has("null"):
-		return "Object?"
+		return nullableObject
 	default:
 		e.err = fmt.Errorf("dart unsupported schema for %s: type %v", hint, schema.Type)
-		return "Object?"
+		return nullableObject
 	}
-	if nullable {
+	if schema.Type.Has("null") {
 		return base + "?"
 	}
 	return base
@@ -286,7 +311,41 @@ func typeName(raw string) string {
 	return strings.Join(parts, "")
 }
 
-var dartKeywords = map[string]bool{"assert": true, "break": true, "case": true, "catch": true, "class": true, "const": true, "continue": true, "default": true, "do": true, "else": true, "enum": true, "extends": true, "false": true, "final": true, "finally": true, "for": true, "if": true, "in": true, "is": true, "new": true, "null": true, "return": true, "super": true, "switch": true, "this": true, "throw": true, "true": true, "try": true, "var": true, "void": true, "while": true, "with": true, "yield": true}
+var dartKeywords = map[string]bool{
+	"assert":   true,
+	"break":    true,
+	"case":     true,
+	"catch":    true,
+	"class":    true,
+	"const":    true,
+	"continue": true,
+	"default":  true,
+	"do":       true,
+	"else":     true,
+	"enum":     true,
+	"extends":  true,
+	"false":    true,
+	"final":    true,
+	"finally":  true,
+	"for":      true,
+	"if":       true,
+	"in":       true,
+	"is":       true,
+	"new":      true,
+	"null":     true,
+	"return":   true,
+	"super":    true,
+	"switch":   true,
+	"this":     true,
+	"throw":    true,
+	"true":     true,
+	"try":      true,
+	"var":      true,
+	"void":     true,
+	"while":    true,
+	"with":     true,
+	"yield":    true,
+}
 
 func fieldName(raw string) string {
 	name := typeName(raw)
@@ -302,3 +361,8 @@ func fieldName(raw string) string {
 }
 
 func quote(value string) string { return strconv.Quote(value) }
+
+func isModelSchema(schema *openapi.Schema) bool {
+	return len(schema.OneOf) > 0 || len(schema.Enum) > 0 ||
+		(schema.IsObject() && len(schema.Properties) > 0)
+}

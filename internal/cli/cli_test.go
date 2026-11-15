@@ -1,3 +1,4 @@
+//nolint:goconst // Keep complete CLI argument vectors visible in each contract.
 package cli_test
 
 import (
@@ -31,7 +32,10 @@ func TestParseRejectsInvalidModeLangPair(t *testing.T) {
 	if err == nil {
 		t.Fatal("Parse invalid mode/lang succeeded")
 	}
-	if !strings.Contains(err.Error(), "valid modes are types and client; valid languages are go, typescript, rust, and dart") {
+	if !strings.Contains(
+		err.Error(),
+		"valid modes are types and client; valid languages are go, typescript, rust, and dart",
+	) {
 		t.Fatalf("Parse error = %q, want valid pair message", err.Error())
 	}
 }

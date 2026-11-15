@@ -136,6 +136,8 @@ func (t *Type) UnmarshalYAML(value *yaml.Node) error {
 		for _, item := range value.Content {
 			*t = append(*t, item.Value)
 		}
+	case yaml.DocumentNode, yaml.MappingNode, yaml.AliasNode:
+		return nil
 	}
 	return nil
 }
@@ -186,7 +188,10 @@ func Parse(raw []byte) (*Document, error) {
 		return nil, fmt.Errorf("parse openapi document: %w", err)
 	}
 	if doc.OpenAPI != "3.1.0" && doc.OpenAPI != "3.2.0" {
-		return nil, fmt.Errorf("unsupported OpenAPI version %q; expected 3.1.0 or 3.2.0", doc.OpenAPI)
+		return nil, fmt.Errorf(
+			"unsupported OpenAPI version %q; expected 3.1.0 or 3.2.0",
+			doc.OpenAPI,
+		)
 	}
 	if doc.Components.Schemas == nil {
 		doc.Components.Schemas = map[string]*Schema{}
@@ -234,7 +239,8 @@ func (doc *Document) UsesDuration() bool {
 				return true
 			}
 		}
-		if route.Operation.JSONRequestSchema().UsesDuration() || route.Operation.JSONResponseSchema().UsesDuration() {
+		if route.Operation.JSONRequestSchema().UsesDuration() ||
+			route.Operation.JSONResponseSchema().UsesDuration() {
 			return true
 		}
 		for _, response := range route.Operation.Responses {
@@ -446,7 +452,10 @@ func (doc *Document) OperationHasSSEResponseMethod(method string, operation *Ope
 	return false
 }
 
-func (doc *Document) mergeParameters(pathParameters []Parameter, operationParameters []Parameter) []Parameter {
+func (doc *Document) mergeParameters(
+	pathParameters []Parameter,
+	operationParameters []Parameter,
+) []Parameter {
 	merged := make([]Parameter, 0, len(pathParameters)+len(operationParameters))
 	indices := make(map[string]int, len(pathParameters)+len(operationParameters))
 	appendParameter := func(parameter Parameter) {

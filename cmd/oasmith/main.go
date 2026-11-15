@@ -8,9 +8,11 @@ import (
 	"github.com/responsibleapi/oasmith/internal/cli"
 )
 
+const invalidInputExitCode = 2
+
 func main() {
 	if err := cli.Run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
+		os.Exit(invalidInputExitCode)
 	}
 }

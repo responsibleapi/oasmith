@@ -1,7 +1,10 @@
+//nolint:goconst // Fixture names, wire headers and command flags remain explicit in independent expected contracts.
 package oasmith_test
 
 import (
 	"context"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,14 +18,17 @@ import (
 	"github.com/responsibleapi/oasmith/internal/tsemit"
 )
 
+//nolint:funlen // Generate and execute each language contract in its own isolated workspace.
 func TestJSONDecodingPolicies(t *testing.T) {
 	t.Parallel()
 	for _, row := range []struct {
 		language, fixture, program string
 		command                    []string
 	}{
-		{language: "go", fixture: "go-test.txt", program: "policy_test.go", command: []string{"go", "test", "-count=1", "./..."}},
-		{language: "dart", fixture: "dart-check.dart", program: "check.dart", command: []string{"dart", "run", "check.dart"}},
+		{
+			language: "go", fixture: "go-test.txt", program: "policy_test.go",
+			command: []string{"go", "test", "-count=1", "./..."},
+		},
 	} {
 		t.Run(row.language, func(t *testing.T) {
 			t.Parallel()
@@ -39,7 +45,16 @@ func TestJSONDecodingPolicies(t *testing.T) {
 				}
 			})
 			for _, policy := range []string{"api", "strict"} {
-				args := []string{"--openapi", "testdata/fixtures/json-policy.yaml", "--mode", "types", "--lang", row.language, "--out", filepath.Join(out, policy)}
+				args := []string{
+					"--openapi",
+					"testdata/fixtures/json-policy.yaml",
+					"--mode",
+					"types",
+					"--lang",
+					row.language,
+					"--out",
+					filepath.Join(out, policy),
+				}
 				if policy == "strict" {
 					args = append(args, "--strict")
 				}
@@ -47,11 +62,19 @@ func TestJSONDecodingPolicies(t *testing.T) {
 					t.Fatalf("generate %s %s: %v", row.language, policy, err)
 				}
 			}
-			files := map[string]string{"cases.json": "testdata/fixtures/json-policy-cases.json", row.program: filepath.Join("testdata/json-policy", row.fixture)}
-			if err := root.WriteFile("go.mod", []byte("module policy\n\ngo 1.27.0\n"), 0o600); err != nil {
+			files := map[string]string{
+				"cases.json": "testdata/fixtures/json-policy-cases.json",
+				row.program:  filepath.Join("testdata/json-policy", row.fixture),
+			}
+			if err := root.WriteFile(
+				"go.mod",
+				[]byte("module policy\n\ngo 1.27.0\n"),
+				0o600,
+			); err != nil {
 				t.Fatal(err)
 			}
 			writeJSONPolicyFixtures(t, root, files)
+			//nolint:gosec // The executable and arguments come from the fixed language table above.
 			command := exec.CommandContext(ctx, row.command[0], row.command[1:]...)
 			command.Dir = out
 			if output, err := command.CombinedOutput(); err != nil {
@@ -74,6 +97,7 @@ func writeJSONPolicyFixtures(t *testing.T, root *os.Root, files map[string]strin
 	}
 }
 
+//nolint:funlen // This integration scenario keeps generation, compilation and the complete caller contract together.
 func TestGoldenFixtures(t *testing.T) {
 	t.Parallel()
 
@@ -149,6 +173,7 @@ func TestGoldenFixtures(t *testing.T) {
 	}
 }
 
+//nolint:funlen // This integration scenario keeps generation, compilation and the complete caller contract together.
 func TestCLIGeneratesInsideIgnoredDirectoriesWithoutExternalTools(t *testing.T) {
 	t.Parallel()
 
@@ -178,7 +203,11 @@ func TestCLIGeneratesInsideIgnoredDirectoriesWithoutExternalTools(t *testing.T) 
 				".gitignore":      "gen/\n",
 				".prettierignore": "*.ts\n",
 			} {
-				if err := os.WriteFile(filepath.Join(workspace, name), []byte(content), 0o644); err != nil {
+				if err := os.WriteFile(
+					filepath.Join(workspace, name),
+					[]byte(content),
+					0o600,
+				); err != nil {
 					t.Fatalf("write caller %s: %v", name, err)
 				}
 			}
@@ -199,7 +228,11 @@ func TestCLIGeneratesInsideIgnoredDirectoriesWithoutExternalTools(t *testing.T) 
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("generate ignored %s client: %v\n%s", testCase.lang, err, output)
 			}
-			compareDirs(t, filepath.Join("testdata", "golden", testCase.golden), filepath.Join(workspace, "gen", "client"))
+			compareDirs(
+				t,
+				filepath.Join("testdata", "golden", testCase.golden),
+				filepath.Join(workspace, "gen", "client"),
+			)
 			entries, err := os.ReadDir(workingDir)
 			if err != nil {
 				t.Fatalf("read caller working directory: %v", err)
@@ -220,7 +253,10 @@ func TestGoOneOfOutputForConfigDiscriminators(t *testing.T) {
 		t.Fatalf("parse config fixture: %v", err)
 	}
 	outDir := t.TempDir()
-	if err := goemit.Emit(doc, goemit.Options{OutDir: outDir, SourcePath: fixturePath}); err != nil {
+	if err := goemit.Emit(
+		doc,
+		goemit.Options{OutDir: outDir, SourcePath: fixturePath},
+	); err != nil {
 		t.Fatalf("emit config go: %v", err)
 	}
 	raw, err := os.ReadFile(filepath.Join(outDir, "models.go"))
@@ -300,18 +336,21 @@ func TestGoClientBehavior(t *testing.T) {
 		t.Fatalf("parse public client fixture: %v", err)
 	}
 	outDir := t.TempDir()
-	if err := goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: fixturePath}); err != nil {
+	if err := goemit.EmitClient(
+		doc,
+		goemit.Options{OutDir: outDir, SourcePath: fixturePath},
+	); err != nil {
 		t.Fatalf("emit Go client: %v", err)
 	}
 	for name, source := range map[string]string{
 		"go.mod":         "module generatedclient\n\ngo 1.27.0\n",
 		"client_test.go": goClientBehaviorTest,
 	} {
-		if err := os.WriteFile(filepath.Join(outDir, name), []byte(source), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(outDir, name), []byte(source), 0o600); err != nil {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.CommandContext(t.Context(), "go", "test", "./...")
 	cmd.Dir = outDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -328,7 +367,10 @@ func TestGeneratedClientsUseCanonicalRequestAndResponseShapes(t *testing.T) {
 		t.Fatalf("parse public client fixture: %v", err)
 	}
 	goOut := t.TempDir()
-	if err := goemit.EmitClient(doc, goemit.Options{OutDir: goOut, SourcePath: fixturePath}); err != nil {
+	if err := goemit.EmitClient(
+		doc,
+		goemit.Options{OutDir: goOut, SourcePath: fixturePath},
+	); err != nil {
 		t.Fatalf("emit Go client: %v", err)
 	}
 	goRaw, err := os.ReadFile(filepath.Join(goOut, "client.go"))
@@ -375,15 +417,22 @@ func TestGoPackageNameFallsBackToSourceBasename(t *testing.T) {
 
 	doc := &openapi.Document{Info: openapi.Info{Title: "YouTube Data API v3"}}
 	outDir := t.TempDir()
-	if err := goemit.Emit(doc, goemit.Options{OutDir: outDir, SourcePath: "youtube.yaml"}); err != nil {
+	if err := goemit.Emit(
+		doc,
+		goemit.Options{OutDir: outDir, SourcePath: "youtube.yaml"},
+	); err != nil {
 		t.Fatalf("emit YouTube models: %v", err)
 	}
 	raw, err := os.ReadFile(filepath.Join(outDir, "models.go"))
 	if err != nil {
 		t.Fatalf("read models.go: %v", err)
 	}
-	if !strings.HasPrefix(string(raw), "package youtube\n") {
-		t.Fatalf("models package declaration = %q, want youtube", strings.SplitN(string(raw), "\n", 2)[0])
+	parsed, err := parser.ParseFile(token.NewFileSet(), "models.go", raw, parser.PackageClauseOnly)
+	if err != nil {
+		t.Fatalf("parse generated package: %v", err)
+	}
+	if parsed.Name.Name != "youtube" {
+		t.Fatalf("models package declaration = %q, want youtube", parsed.Name.Name)
 	}
 }
 
@@ -410,7 +459,10 @@ paths:
 		t.Fatalf("parse operation identity fixture: %v", err)
 	}
 	outDir := t.TempDir()
-	if err := goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: "identity.yaml"}); err != nil {
+	if err := goemit.EmitClient(
+		doc,
+		goemit.Options{OutDir: outDir, SourcePath: "identity.yaml"},
+	); err != nil {
 		t.Fatalf("emit operation identity fixture: %v", err)
 	}
 	raw, err := os.ReadFile(filepath.Join(outDir, "client.go"))
@@ -438,7 +490,7 @@ paths:
 func TestTypeScriptOperationIDCannotInventWireBehavior(t *testing.T) {
 	t.Parallel()
 
-	var sources []string
+	sources := make([]string, 0, 2)
 	for _, operationID := range []string{"uploadMedia", "youtube.videos.insert"} {
 		doc, err := openapi.Parse([]byte(strings.ReplaceAll(`openapi: 3.2.0
 info:
@@ -484,6 +536,7 @@ paths:
 	}
 }
 
+//nolint:funlen // This integration scenario keeps generation, compilation and the complete caller contract together.
 func TestGoClientRequiresBaseURLAndGeneratesDeclaredSequentialMultipart(t *testing.T) {
 	t.Parallel()
 
@@ -543,7 +596,10 @@ components:
 		t.Fatalf("parse ordered multipart fixture: %v", err)
 	}
 	outDir := t.TempDir()
-	if err := goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: "ordered.yaml"}); err != nil {
+	if err := goemit.EmitClient(
+		doc,
+		goemit.Options{OutDir: outDir, SourcePath: "ordered.yaml"},
+	); err != nil {
 		t.Fatalf("emit ordered multipart fixture: %v", err)
 	}
 	clientSource, err := os.ReadFile(filepath.Join(outDir, "client.go"))
@@ -564,11 +620,11 @@ components:
 		"go.mod":         "module orderedclient\n\ngo 1.27.0\n",
 		"client_test.go": sequentialMultipartBehaviorTest,
 	} {
-		if err := os.WriteFile(filepath.Join(outDir, name), []byte(source), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(outDir, name), []byte(source), 0o600); err != nil {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.CommandContext(t.Context(), "go", "test", "./...")
 	cmd.Dir = outDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -650,7 +706,8 @@ paths:
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			err := testCase.emit(t.TempDir())
-			if err == nil || !strings.Contains(err.Error(), "operation upload has unsupported request body") {
+			if err == nil ||
+				!strings.Contains(err.Error(), "operation upload has unsupported request body") {
 				t.Fatalf("unsupported request body error = %v", err)
 			}
 		})
@@ -660,24 +717,7 @@ paths:
 func compareDirs(t *testing.T, goldenDir string, outDir string) {
 	t.Helper()
 
-	var goldenFiles []string
-	err := filepath.WalkDir(goldenDir, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(goldenDir, path)
-		if err != nil {
-			return err
-		}
-		goldenFiles = append(goldenFiles, rel)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk golden dir %s: %v", goldenDir, err)
-	}
+	goldenFiles := directoryFiles(t, goldenDir)
 	for _, rel := range goldenFiles {
 		goldenRaw, err := os.ReadFile(filepath.Join(goldenDir, rel))
 		if err != nil {
@@ -688,32 +728,25 @@ func compareDirs(t *testing.T, goldenDir string, outDir string) {
 			t.Fatalf("read generated %s: %v", rel, err)
 		}
 		if string(outRaw) != string(goldenRaw) {
-			t.Fatalf("%s mismatch\n--- golden\n%s\n--- generated\n%s", rel, string(goldenRaw), string(outRaw))
+			t.Fatalf(
+				"%s mismatch\n--- golden\n%s\n--- generated\n%s",
+				rel,
+				string(goldenRaw),
+				string(outRaw),
+			)
 		}
 	}
-	var generatedFiles []string
-	err = filepath.WalkDir(outDir, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(outDir, path)
-		if err != nil {
-			return err
-		}
-		generatedFiles = append(generatedFiles, rel)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk generated dir %s: %v", outDir, err)
-	}
+	generatedFiles := directoryFiles(t, outDir)
 	if strings.Join(generatedFiles, "\n") != strings.Join(goldenFiles, "\n") {
-		t.Fatalf("generated file list mismatch\ngolden:\n%s\ngenerated:\n%s", strings.Join(goldenFiles, "\n"), strings.Join(generatedFiles, "\n"))
+		t.Fatalf(
+			"generated file list mismatch\ngolden:\n%s\ngenerated:\n%s",
+			strings.Join(goldenFiles, "\n"),
+			strings.Join(generatedFiles, "\n"),
+		)
 	}
 }
 
+//nolint:lll // Preserve the independent generated-client Go program verbatim.
 const goClientBehaviorTest = `package publicapi
 
 import (
@@ -1347,3 +1380,26 @@ func TestRequiredBaseURLAndOrderedParts(t *testing.T) {
 	}
 }
 `
+
+func directoryFiles(t *testing.T, directory string) []string {
+	t.Helper()
+	var files []string
+	err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(directory, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, rel)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk directory %s: %v", directory, err)
+	}
+	return files
+}

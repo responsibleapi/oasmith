@@ -22,14 +22,21 @@ type Options struct {
 	Strict     bool
 }
 
+const goInt32 = "int32"
+
 type emitter struct{ strict bool }
 
 //go:embed templates/*.gotmpl
 var templateFS embed.FS
 
+const (
+	generatedDirectoryMode = 0o755
+	generatedFileMode      = 0o644
+)
+
 // Emit writes Go model files for the supplied OpenAPI document.
 func Emit(doc *openapi.Document, opts Options) error {
-	if err := os.MkdirAll(opts.OutDir, 0o755); err != nil {
+	if err := os.MkdirAll(opts.OutDir, generatedDirectoryMode); err != nil {
 		return fmt.Errorf("create go output directory %q: %w", opts.OutDir, err)
 	}
 	raw, err := executeTemplate("models.go", goModelsTemplateData(doc, opts))
@@ -41,7 +48,7 @@ func Emit(doc *openapi.Document, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("format %s: %w", path, err)
 	}
-	if err := os.WriteFile(path, source, 0o644); err != nil {
+	if err := os.WriteFile(path, source, generatedFileMode); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
@@ -65,7 +72,7 @@ func EmitClient(doc *openapi.Document, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("format %s: %w", path, err)
 	}
-	if err := os.WriteFile(path, source, 0o644); err != nil {
+	if err := os.WriteFile(path, source, generatedFileMode); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
@@ -290,8 +297,8 @@ func (e *emitter) goType(schema *openapi.Schema) string {
 	switch schema.Format {
 	case "int64":
 		return "int64"
-	case "int32", "uint32":
-		return "int32"
+	case goInt32, "uint32":
+		return goInt32
 	case "duration":
 		return "ISODuration"
 	}
@@ -299,7 +306,7 @@ func (e *emitter) goType(schema *openapi.Schema) string {
 	case "boolean":
 		return "bool"
 	case "integer":
-		return "int32"
+		return goInt32
 	case "number":
 		return "float64"
 	case "object":
@@ -339,7 +346,8 @@ func goImports(doc *openapi.Document, strict bool) []string {
 	imports := map[string]bool{}
 	if strict {
 		for _, schema := range doc.Components.Schemas {
-			if allowed, ok := schema.AdditionalProperties.(bool); schema.IsObject() && ok && !allowed {
+			if allowed, ok := schema.AdditionalProperties.(bool); schema.IsObject() && ok &&
+				!allowed {
 				imports["bytes"] = true
 				imports["encoding/json"] = true
 				imports["fmt"] = true

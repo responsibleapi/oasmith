@@ -9,7 +9,13 @@ import (
 )
 
 // ExecuteTemplate parses embedded generator templates and executes name.
-func ExecuteTemplate(kind string, templateFS fs.FS, name string, funcs map[string]any, data any) ([]byte, error) {
+func ExecuteTemplate(
+	kind string,
+	templateFS fs.FS,
+	name string,
+	funcs map[string]any,
+	data any,
+) ([]byte, error) {
 	tpl := template.New("")
 	if len(funcs) > 0 {
 		tpl = tpl.Funcs(template.FuncMap(funcs))

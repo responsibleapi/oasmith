@@ -21,6 +21,13 @@ type Options struct {
 	Strict  bool
 }
 
+const (
+	typesMode  = "types"
+	clientMode = "client"
+	usage      = "usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescrip" +
+		"t|rust|dart> --out <dir>"
+)
+
 // Run parses args, loads the OpenAPI document, and emits requested outputs.
 func Run(args []string) error {
 	opts, err := Parse(args)
@@ -31,19 +38,41 @@ func Run(args []string) error {
 	if err != nil {
 		return err
 	}
-	switch {
-	case opts.Lang == "dart":
-		return dartemit.Emit(doc, dartemit.Options{OutDir: opts.Out, Strict: opts.Strict}, opts.Mode == "client")
-	case opts.Lang == "rust":
-		return rustemit.Emit(doc, rustemit.Options{OutDir: opts.Out, StrictJSON: opts.Strict}, opts.Mode == "client")
-	case opts.Mode == "types" && opts.Lang == "go":
-		return goemit.Emit(doc, goemit.Options{OutDir: opts.Out, SourcePath: opts.OpenAPI, Strict: opts.Strict})
-	case opts.Mode == "client" && opts.Lang == "go":
-		return goemit.EmitClient(doc, goemit.Options{OutDir: opts.Out, SourcePath: opts.OpenAPI, Strict: opts.Strict})
-	case opts.Lang == "typescript":
-		return tsemit.Emit(doc, tsemit.Options{OutDir: opts.Out, Strict: opts.Strict, TypesOnly: opts.Mode == "types"})
+	switch opts.Lang {
+	case "dart":
+		return dartemit.Emit(
+			doc,
+			dartemit.Options{OutDir: opts.Out, Strict: opts.Strict},
+			opts.Mode == clientMode,
+		)
+	case "rust":
+		return rustemit.Emit(
+			doc,
+			rustemit.Options{OutDir: opts.Out, StrictJSON: opts.Strict},
+			opts.Mode == clientMode,
+		)
+	case "go":
+		if opts.Mode == typesMode {
+			return goemit.Emit(
+				doc,
+				goemit.Options{OutDir: opts.Out, SourcePath: opts.OpenAPI, Strict: opts.Strict},
+			)
+		}
+		return goemit.EmitClient(
+			doc,
+			goemit.Options{OutDir: opts.Out, SourcePath: opts.OpenAPI, Strict: opts.Strict},
+		)
+	case "typescript":
+		return tsemit.Emit(
+			doc,
+			tsemit.Options{
+				OutDir:    opts.Out,
+				Strict:    opts.Strict,
+				TypesOnly: opts.Mode == typesMode,
+			},
+		)
 	default:
-		return fmt.Errorf("unsupported --mode/--lang pair %q/%q; valid modes are types and client; valid languages are go, typescript, rust, and dart", opts.Mode, opts.Lang)
+		return opts.unsupported()
 	}
 }
 
@@ -55,16 +84,46 @@ func Parse(args []string) (Options, error) {
 	fs.StringVar(&opts.Mode, "mode", "", "generation mode")
 	fs.StringVar(&opts.Lang, "lang", "", "output language")
 	fs.StringVar(&opts.Out, "out", "", "output directory")
-	fs.BoolVar(&opts.Strict, "strict", false, "reject unknown JSON object fields where additionalProperties is false (for configuration)")
+	fs.BoolVar(
+		&opts.Strict,
+		"strict",
+		false,
+		"reject unknown JSON object fields where additionalProperties is false (for configuration)",
+	)
 	if err := fs.Parse(args); err != nil {
-		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript|rust|dart> --out <dir>")
+		return Options{}, fmt.Errorf("%s: %w", usage, err)
 	}
+	if err := opts.validate(); err != nil {
+		return Options{}, err
+	}
+	return opts, nil
+}
+
+func (opts Options) validate() error {
 	if opts.OpenAPI == "" || opts.Mode == "" || opts.Lang == "" || opts.Out == "" {
-		return Options{}, fmt.Errorf("usage: oasmith --openapi <openapidoc> --mode <types|client> --lang <go|typescript|rust|dart> --out <dir>")
+		return fmt.Errorf(
+			"incomplete generation options (mode=%q, lang=%q); %s",
+			opts.Mode,
+			opts.Lang,
+			usage,
+		)
 	}
-	if (opts.Mode == "types" || opts.Mode == "client") &&
-		(opts.Lang == "rust" || opts.Lang == "dart" || opts.Lang == "go" || opts.Lang == "typescript") {
-		return opts, nil
+	if opts.Mode != typesMode && opts.Mode != clientMode {
+		return opts.unsupported()
 	}
-	return Options{}, fmt.Errorf("unsupported --mode/--lang pair %q/%q; valid modes are types and client; valid languages are go, typescript, rust, and dart", opts.Mode, opts.Lang)
+	switch opts.Lang {
+	case "rust", "dart", "go", "typescript":
+		return nil
+	default:
+		return opts.unsupported()
+	}
+}
+
+func (opts Options) unsupported() error {
+	return fmt.Errorf(
+		"unsupported --mode/--lang pair %q/%q; valid modes are types and client; "+
+			"valid languages are go, typescript, rust, and dart",
+		opts.Mode,
+		opts.Lang,
+	)
 }

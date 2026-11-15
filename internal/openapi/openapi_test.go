@@ -9,6 +9,8 @@ import (
 	"github.com/responsibleapi/oasmith/internal/openapi"
 )
 
+const schemaString = "string"
+
 func TestParseOpenAPI32PrivateFixture(t *testing.T) {
 	t.Parallel()
 
@@ -110,8 +112,14 @@ func TestSuccessfulSSEOperationsAreGETOnly(t *testing.T) {
 					continue
 				}
 				resolved := doc.ResolveResponse(response)
-				if _, ok := resolved.Content["text/event-stream"]; ok && route.Method != http.MethodGet {
-					t.Errorf("%s %s (%s) exposes a successful SSE response on a non-GET operation", route.Method, route.Path, fixture)
+				if _, ok := resolved.Content["text/event-stream"]; ok &&
+					route.Method != http.MethodGet {
+					t.Errorf(
+						"%s %s (%s) exposes a successful SSE response on a non-GET operation",
+						route.Method,
+						route.Path,
+						fixture,
+					)
 				}
 			}
 		}
@@ -121,7 +129,9 @@ func TestSuccessfulSSEOperationsAreGETOnly(t *testing.T) {
 func TestSSEPayloadSchema(t *testing.T) {
 	t.Parallel()
 
-	privateDoc, err := openapi.ParseFile(filepath.Join("..", "..", "testdata", "fixtures", "private.yaml"))
+	privateDoc, err := openapi.ParseFile(
+		filepath.Join("..", "..", "testdata", "fixtures", "private.yaml"),
+	)
 	if err != nil {
 		t.Fatalf("ParseFile private fixture: %v", err)
 	}
@@ -130,7 +140,9 @@ func TestSSEPayloadSchema(t *testing.T) {
 		t.Fatalf("single SSE payload schema = %#v", complete)
 	}
 
-	publicDoc, err := openapi.ParseFile(filepath.Join("..", "..", "testdata", "fixtures", "public-client.yaml"))
+	publicDoc, err := openapi.ParseFile(
+		filepath.Join("..", "..", "testdata", "fixtures", "public-client.yaml"),
+	)
 	if err != nil {
 		t.Fatalf("ParseFile public client fixture: %v", err)
 	}
@@ -185,7 +197,7 @@ func TestSchemaDurationDetection(t *testing.T) {
 	t.Parallel()
 
 	duration := &openapi.Schema{
-		Type:   openapi.Type{"string"},
+		Type:   openapi.Type{schemaString},
 		Format: "duration",
 	}
 	if !duration.IsDuration() {
@@ -193,7 +205,7 @@ func TestSchemaDurationDetection(t *testing.T) {
 	}
 
 	plainString := &openapi.Schema{
-		Type: openapi.Type{"string"},
+		Type: openapi.Type{schemaString},
 	}
 	if plainString.IsDuration() {
 		t.Fatal("plain string schema was detected as duration")
@@ -209,7 +221,7 @@ func TestSchemaUsesDurationRecursively(t *testing.T) {
 			"values": {
 				Type: openapi.Type{"array"},
 				Items: &openapi.Schema{
-					Type:   openapi.Type{"string"},
+					Type:   openapi.Type{schemaString},
 					Format: "duration",
 				},
 			},

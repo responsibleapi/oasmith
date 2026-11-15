@@ -27,13 +27,13 @@ request bodies, responses, and server-sent event operations.
 OASmith requires Go 1.26 or newer.
 
 ```sh
-go install github.com/responsibleapi/oasmith/cmd/oasmith@latest
+go get -tool github.com/responsibleapi/oasmith/cmd/oasmith@latest
 ```
 
 ## Usage
 
 ```sh
-oasmith \
+go tool oasmith \
   --openapi ./openapi.yaml \
   --mode client \
   --lang go \
@@ -274,5 +274,15 @@ See [Rust trace propagation](#rust) to configure automatic propagation once.
 Rust supports JSON and raw request bodies, optional bodies, scalar and repeated
 query parameters, headers, escaped path parameters, enums, nullable values and
 untagged `oneOf` models. Sequential multipart requests currently fail generation
-with an explicit unsupported-body error. Run `moon run oasmith:test-rust` to generate,
-compile, and execute the Rust contract fixtures.
+with an explicit unsupported-body error.
+
+Development tools are pinned in this repository's `mise.toml`. Run
+`mise install --locked`, then `moon run oasmith:check`. The generator and its
+default verification run in Go; neither Dart nor Rust is a tool requirement.
+Generating those languages does not invoke their compilers.
+
+Go linting uses `go tool golangci-lint` and the same policy as the parent
+workspace. Moon derives exclusions from this checkout's Git ignore rules.
+Generated application code belongs in ignored directories. The tracked
+`testdata/golden` files are independent expected-output fixtures for the
+generator's contract tests; refresh them with `moon run oasmith:update-goldens`.

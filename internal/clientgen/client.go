@@ -10,6 +10,13 @@ import (
 	"github.com/responsibleapi/oasmith/internal/openapi"
 )
 
+const (
+	jsonMediaType        = "application/json"
+	eventStreamMediaType = "text/event-stream"
+	httpStatusDigits     = 3
+	decimalBase          = 10
+)
+
 // Operation is the normalized client contract for one OpenAPI operation.
 type Operation struct {
 	Route       openapi.OperationRoute
@@ -101,7 +108,7 @@ func analyzeRequestBody(operation *openapi.Operation) (RequestBody, error) {
 	if operation.RequestBody == nil {
 		return RequestBody{}, nil
 	}
-	if media, ok := operation.RequestBody.Content["application/json"]; ok {
+	if media, ok := operation.RequestBody.Content[jsonMediaType]; ok {
 		if media.Schema == nil {
 			return RequestBody{}, fmt.Errorf(
 				"operation %s has unsupported request body: application/json schema is missing",
@@ -116,13 +123,17 @@ func analyzeRequestBody(operation *openapi.Operation) (RequestBody, error) {
 	if multipart, ok := sequentialMultipartBody(operation.RequestBody); ok {
 		return RequestBody{Multipart: multipart}, nil
 	}
-	if mediaType, ok := operation.RawRequestBodyMediaType(); ok && !strings.HasPrefix(mediaType, "multipart/") {
+	if mediaType, ok := operation.RawRequestBodyMediaType(); ok &&
+		!strings.HasPrefix(mediaType, "multipart/") {
 		return RequestBody{Raw: &RawBody{
 			MediaType: mediaType,
 			Required:  operation.RequestBody.Required,
 		}}, nil
 	}
-	return RequestBody{}, fmt.Errorf("operation %s has unsupported request body", operation.OperationID)
+	return RequestBody{}, fmt.Errorf(
+		"operation %s has unsupported request body",
+		operation.OperationID,
+	)
 }
 
 func sequentialMultipartBody(requestBody *openapi.RequestBody) (*MultipartBody, bool) {
@@ -133,36 +144,42 @@ func sequentialMultipartBody(requestBody *openapi.RequestBody) (*MultipartBody, 
 	sort.Strings(mediaTypes)
 	for _, mediaType := range mediaTypes {
 		media := requestBody.Content[mediaType]
-		if !strings.HasPrefix(mediaType, "multipart/") || media.Schema == nil ||
-			!media.Schema.Type.Has("array") || len(media.Schema.PrefixItems) != 2 ||
-			len(media.PrefixEncoding) != 2 {
-			continue
+		if body := multipartBody(mediaType, media, requestBody.Required); body != nil {
+			return body, true
 		}
-		minimum, maximum := 0, 0
-		if media.Schema.MinItems != nil {
-			minimum = *media.Schema.MinItems
-		}
-		if media.Schema.MaxItems != nil {
-			maximum = *media.Schema.MaxItems
-		}
-		if minimum != 2 || maximum != 2 {
-			continue
-		}
-		body := &MultipartBody{
-			MediaType: mediaType,
-			Required:  requestBody.Required,
-		}
-		for index, schema := range media.Schema.PrefixItems {
-			body.Parts = append(body.Parts, MultipartPart{
-				Title:       schema.Title,
-				Schema:      schema,
-				ContentType: strings.TrimSpace(media.PrefixEncoding[index].ContentType),
-				Binary:      schema.Type.Has("string") && schema.Format == "binary",
-			})
-		}
-		return body, true
 	}
 	return nil, false
+}
+
+func multipartBody(mediaType string, media openapi.MediaType, required bool) *MultipartBody {
+	if !strings.HasPrefix(mediaType, "multipart/") || media.Schema == nil ||
+		!media.Schema.Type.Has("array") || len(media.Schema.PrefixItems) != 2 ||
+		len(media.PrefixEncoding) != 2 {
+		return nil
+	}
+	minimum, maximum := 0, 0
+	if media.Schema.MinItems != nil {
+		minimum = *media.Schema.MinItems
+	}
+	if media.Schema.MaxItems != nil {
+		maximum = *media.Schema.MaxItems
+	}
+	if minimum != 2 || maximum != 2 {
+		return nil
+	}
+	body := &MultipartBody{
+		MediaType: mediaType,
+		Required:  required,
+	}
+	for index, schema := range media.Schema.PrefixItems {
+		body.Parts = append(body.Parts, MultipartPart{
+			Title:       schema.Title,
+			Schema:      schema,
+			ContentType: strings.TrimSpace(media.PrefixEncoding[index].ContentType),
+			Binary:      schema.Type.Has("string") && schema.Format == "binary",
+		})
+	}
+	return body
 }
 
 func analyzeResponses(doc *openapi.Document, route openapi.OperationRoute) []Response {
@@ -183,7 +200,8 @@ func analyzeResponses(doc *openapi.Document, route openapi.OperationRoute) []Res
 		if ok {
 			response.MediaType = mediaType
 			response.Schema = media.Schema
-			if mediaType == "text/event-stream" && route.Method == http.MethodGet && isSuccessStatus(statusCode) {
+			if mediaType == eventStreamMediaType && route.Method == http.MethodGet &&
+				isSuccessStatus(statusCode) {
 				response.Schema = media.ItemSchema
 				response.SSE = response.Schema != nil
 			}
@@ -199,8 +217,8 @@ func isSuccessStatus(status int) bool {
 
 func responseMedia(response openapi.Response) (string, openapi.MediaType, bool) {
 	for _, mediaType := range []string{
-		"text/event-stream",
-		"application/json",
+		eventStreamMediaType,
+		jsonMediaType,
 		"application/rss+xml",
 		"text/yaml",
 		"text/plain",
@@ -225,19 +243,19 @@ func responseMedia(response openapi.Response) (string, openapi.MediaType, bool) 
 func operationAccept(responses []Response) string {
 	for _, response := range responses {
 		if response.SSE {
-			return "text/event-stream"
+			return eventStreamMediaType
 		}
 	}
 	for _, response := range responses {
-		if response.MediaType == "application/json" {
-			return "application/json"
+		if response.MediaType == jsonMediaType {
+			return jsonMediaType
 		}
 	}
 	return "*/*"
 }
 
 func parseStatus(status string) (int, bool) {
-	if len(status) != 3 {
+	if len(status) != httpStatusDigits {
 		return 0, false
 	}
 	value := 0
@@ -245,7 +263,7 @@ func parseStatus(status string) (int, bool) {
 		if digit < '0' || digit > '9' {
 			return 0, false
 		}
-		value = value*10 + int(digit-'0')
+		value = value*decimalBase + int(digit-'0')
 	}
 	return value, true
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -24,9 +25,14 @@ type Options struct {
 //go:embed templates/*.gotmpl
 var templateFS embed.FS
 
+const (
+	generatedDirectoryMode = 0o755
+	generatedFileMode      = 0o644
+)
+
 // Emit writes TypeScript type and API files for doc.
 func Emit(doc *openapi.Document, opts Options) error {
-	if err := os.MkdirAll(opts.OutDir, 0o755); err != nil {
+	if err := os.MkdirAll(opts.OutDir, generatedDirectoryMode); err != nil {
 		return fmt.Errorf("create typescript output directory %q: %w", opts.OutDir, err)
 	}
 	models, err := modelsSource(doc)
@@ -51,7 +57,7 @@ func Emit(doc *openapi.Document, opts Options) error {
 		files[filepath.Join(opts.OutDir, "api.ts")] = api
 	}
 	for path, source := range files {
-		if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(source), generatedFileMode); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
@@ -87,7 +93,7 @@ type modelPropertyData struct {
 func modelsTemplateData(doc *openapi.Document) modelsData {
 	data := modelsData{UsesDuration: doc.UsesDuration()}
 	for _, name := range doc.SchemaNames() {
-		if name == "string" {
+		if name == stringType {
 			continue
 		}
 		schema := doc.Components.Schemas[name]
@@ -231,13 +237,16 @@ func operationTemplateData(analyzed clientgen.Operation) operationData {
 	params := operationParams(analyzed)
 	responses := operationResponses(analyzed.Responses)
 	data := operationData{
-		ID:                      openapi.LowerCamel(op.OperationID),
-		Method:                  route.Method,
-		Params:                  params,
-		Responses:               responses,
-		SuccessType:             operationSuccessType(responses),
-		ResultType:              operationResultType(responses),
-		RequestObjectSignature:  requestObjectSignature(params, requestInterfaceName(op.OperationID)),
+		ID:          openapi.LowerCamel(op.OperationID),
+		Method:      route.Method,
+		Params:      params,
+		Responses:   responses,
+		SuccessType: operationSuccessType(responses),
+		ResultType:  operationResultType(responses),
+		RequestObjectSignature: requestObjectSignature(
+			params,
+			requestInterfaceName(op.OperationID),
+		),
 		RawRequestSignature:     rawRequestSignature(params, requestInterfaceName(op.OperationID)),
 		RequestObjectArgument:   requestObjectArgument(params),
 		PositionalSignature:     positionalSignature(params),
@@ -260,9 +269,9 @@ func operationTemplateData(analyzed clientgen.Operation) operationData {
 	}
 	if body := bodyParam(params); body != nil {
 		switch body.Kind {
-		case "body":
+		case jsonBodyName:
 			data.JSONBody = &tsRequestBodyData{Name: body.Name, Required: body.Required}
-		case "rawBody":
+		case rawBodyParam:
 			data.RawBody = &tsRawRequestBodyData{
 				Name:      body.Name,
 				Required:  body.Required,
@@ -306,7 +315,7 @@ func modelImports(doc *openapi.Document, operations []clientgen.Operation) []str
 			collectModelNames(doc, response.Type, seen)
 		}
 	}
-	var names []string
+	names := make([]string, 0, len(seen))
 	for name := range seen {
 		names = append(names, name)
 	}
@@ -320,7 +329,7 @@ func collectModelNames(doc *openapi.Document, tsType string, seen map[string]boo
 			seen[name] = true
 			continue
 		}
-		if name == "string" {
+		if name == stringType {
 			continue
 		}
 		if _, ok := doc.Components.Schemas[name]; ok {
@@ -391,21 +400,21 @@ func operationParams(analyzed clientgen.Operation) []opParam {
 		}
 	} else if body := analyzed.RequestBody.JSON; body != nil {
 		params = append(params, opParam{
-			Name:     "body",
-			WireName: "body",
+			Name:     jsonBodyName,
+			WireName: jsonBodyName,
 			Type:     tsType(body.Schema),
 			Required: body.Required,
 			Optional: optional(body.Required),
-			Kind:     "body",
+			Kind:     jsonBodyName,
 		})
 	} else if body := analyzed.RequestBody.Raw; body != nil {
 		params = append(params, opParam{
-			Name:     "body",
-			WireName: "body",
+			Name:     jsonBodyName,
+			WireName: jsonBodyName,
 			Type:     "BodyInit",
 			Required: body.Required,
 			Optional: optional(body.Required),
-			Kind:     "rawBody",
+			Kind:     rawBodyParam,
 		})
 	}
 	return params
@@ -482,9 +491,19 @@ func operationResultType(responses []opResponse) string {
 		status := fmt.Sprintf("status: %d", response.Status)
 		switch {
 		case response.SSE:
-			variants = append(variants, fmt.Sprintf("{ %s; body: AsyncIterable<%s>; raw: Response }", status, response.Type))
+			variants = append(
+				variants,
+				fmt.Sprintf(
+					"{ %s; body: AsyncIterable<%s>; raw: Response }",
+					status,
+					response.Type,
+				),
+			)
 		case response.Body:
-			variants = append(variants, fmt.Sprintf("{ %s; body: %s; raw: Response }", status, response.Type))
+			variants = append(
+				variants,
+				fmt.Sprintf("{ %s; body: %s; raw: Response }", status, response.Type),
+			)
 		default:
 			variants = append(variants, fmt.Sprintf("{ %s; raw: Response }", status))
 		}
@@ -512,33 +531,39 @@ func uniqueStrings(values []string) []string {
 	return unique
 }
 
+const (
+	stringType   = "string"
+	nullType     = "null"
+	jsonBodyName = "body"
+	rawBodyParam = "rawBody"
+)
+
 func tsType(schema *openapi.Schema) string {
 	if schema == nil {
 		return "unknown"
 	}
-	for _, kind := range schema.Type {
-		if kind != "null" {
-			continue
-		}
+	if schema.Type.Has(nullType) {
 		nonNull := *schema
-		nonNull.Type = nil
-		for _, candidate := range schema.Type {
-			if candidate != "null" {
-				nonNull.Type = append(nonNull.Type, candidate)
-			}
-		}
+		nonNull.Type = slices.DeleteFunc(
+			slices.Clone(schema.Type),
+			func(kind string) bool { return kind == nullType },
+		)
 		if len(nonNull.Type) == 0 {
-			return "null"
+			return nullType
 		}
 		return tsType(&nonNull) + " | null"
 	}
 	if schema.Ref != "" {
 		refName := openapi.RefName(schema.Ref)
-		if refName == "string" {
-			return "string"
+		if refName == stringType {
+			return stringType
 		}
 		return refName
 	}
+	return tsValueType(schema)
+}
+
+func tsValueType(schema *openapi.Schema) string {
 	if schema.Const != nil {
 		return quote(fmt.Sprint(schema.Const))
 	}
@@ -563,7 +588,7 @@ func tsType(schema *openapi.Schema) string {
 	case "object":
 		return "{ [key: string]: unknown }"
 	default:
-		return "string"
+		return stringType
 	}
 }
 
@@ -606,7 +631,7 @@ func positionalSignature(params []opParam) string {
 			lastRequiredIndex = index
 		}
 	}
-	var parts []string
+	parts := make([]string, 0, len(params))
 	for index, param := range params {
 		optionalMarker := optional(param.Required)
 		paramType := param.Type
@@ -639,7 +664,11 @@ func pathExpression(path string, params []opParam) string {
 		if param.Kind != "path" {
 			continue
 		}
-		expr = strings.ReplaceAll(expr, "{"+param.WireName+"}", "${encodeURIComponent(requestParameters['"+param.Name+"'])}")
+		expr = strings.ReplaceAll(
+			expr,
+			"{"+param.WireName+"}",
+			"${encodeURIComponent(requestParameters['"+param.Name+"'])}",
+		)
 	}
 	if strings.Contains(expr, "${") {
 		return "`" + expr + "`"
@@ -649,7 +678,7 @@ func pathExpression(path string, params []opParam) string {
 
 func bodyParam(params []opParam) *opParam {
 	for _, param := range params {
-		if param.Kind == "body" || param.Kind == "rawBody" {
+		if param.Kind == jsonBodyName || param.Kind == rawBodyParam {
 			return &param
 		}
 	}
