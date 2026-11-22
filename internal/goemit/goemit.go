@@ -22,7 +22,10 @@ type Options struct {
 	Strict     bool
 }
 
-const goInt32 = "int32"
+const (
+	goInt32    = "int32"
+	binaryType = "[]byte"
+)
 
 type emitter struct{ strict bool }
 

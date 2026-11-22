@@ -745,6 +745,8 @@ async function runInterceptors(
             return { status: {{.Status}}, body, raw: response };
 {{else if .Text}}            const body: {{.Type}} = await response.text();
             return { status: {{.Status}}, body, raw: response };
+{{else if .Binary}}            const body: {{.Type}} = await response.blob();
+            return { status: {{.Status}}, body, raw: response };
 {{else}}            return { status: {{.Status}}, raw: response };
 {{end}}        }
 {{end}}        throw new ResponseError(response, `Unexpected response status ${response.status}`);

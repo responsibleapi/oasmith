@@ -84,6 +84,13 @@ func (response Response) Text() bool {
 			response.MediaType == "application/xml" || strings.HasSuffix(response.MediaType, "+xml"))
 }
 
+// Binary reports whether the response body is raw bytes: it has a schema but is
+// neither a JSON, text, nor server-sent event representation. OpenAPI 3.1+
+// describes such bodies as `type: string` with `contentMediaType`.
+func (response Response) Binary() bool {
+	return response.HasBody() && !response.SSE && !response.JSON() && !response.Text()
+}
+
 // Analyze normalizes and validates every operation used by generated clients.
 func Analyze(doc *openapi.Document) ([]Operation, error) {
 	routes := doc.Operations()

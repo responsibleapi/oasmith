@@ -39,7 +39,6 @@ import type {
     UpdateShow,
     UploadSessionID,
     User,
-    ValidationErr,
 } from './types.ts';
 
 export type FetchInterceptor = (chain: FetchInterceptorChain) => Promise<Response>;
@@ -784,7 +783,7 @@ export class DefaultApi {
         });
     }
 
-    async verifyEmailResult(requestParameters: VerifyEmailRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async verifyEmailResult(requestParameters: VerifyEmailRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.verifyEmailRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -794,7 +793,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -828,7 +828,7 @@ export class DefaultApi {
         });
     }
 
-    async createGoogleSignupSessionResult(requestParameters: CreateGoogleSignupSessionRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: ValidationErr; raw: Response }> {
+    async createGoogleSignupSessionResult(requestParameters: CreateGoogleSignupSessionRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: Blob; raw: Response }> {
         const timedResponse = await this.request(this.createGoogleSignupSessionRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -838,7 +838,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         throw new ResponseError(response, `Unexpected response status ${response.status}`);
         } finally {
@@ -869,7 +870,7 @@ export class DefaultApi {
         });
     }
 
-    async createPasswordLoginSessionResult(requestParameters: CreatePasswordLoginSessionRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 403; raw: Response }> {
+    async createPasswordLoginSessionResult(requestParameters: CreatePasswordLoginSessionRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 403; raw: Response }> {
         const timedResponse = await this.request(this.createPasswordLoginSessionRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -879,7 +880,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -916,7 +918,7 @@ export class DefaultApi {
         });
     }
 
-    async confirmPasswordResetResult(requestParameters: ConfirmPasswordResetRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async confirmPasswordResetResult(requestParameters: ConfirmPasswordResetRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Session; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.confirmPasswordResetRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -926,7 +928,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -960,7 +963,7 @@ export class DefaultApi {
         });
     }
 
-    async requestPasswordResetResult(requestParameters: RequestPasswordResetRequest, initOverrides?: RequestInit): Promise<{ status: 202; raw: Response } | { status: 400; body: ValidationErr; raw: Response }> {
+    async requestPasswordResetResult(requestParameters: RequestPasswordResetRequest, initOverrides?: RequestInit): Promise<{ status: 202; raw: Response } | { status: 400; body: Blob; raw: Response }> {
         const timedResponse = await this.request(this.requestPasswordResetRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -969,7 +972,8 @@ export class DefaultApi {
             return { status: 202, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         throw new ResponseError(response, `Unexpected response status ${response.status}`);
         } finally {
@@ -1000,7 +1004,7 @@ export class DefaultApi {
         });
     }
 
-    async createPasswordSignupSessionResult(requestParameters: CreatePasswordSignupSessionRequest, initOverrides?: RequestInit): Promise<{ status: 202; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 409; raw: Response }> {
+    async createPasswordSignupSessionResult(requestParameters: CreatePasswordSignupSessionRequest, initOverrides?: RequestInit): Promise<{ status: 202; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 409; raw: Response }> {
         const timedResponse = await this.request(this.createPasswordSignupSessionRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1009,7 +1013,8 @@ export class DefaultApi {
             return { status: 202, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 409) {
             return { status: 409, raw: response };
@@ -1037,7 +1042,7 @@ export class DefaultApi {
         });
     }
 
-    async whoamiResult(initOverrides?: RequestInit): Promise<{ status: 200; body: User; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async whoamiResult(initOverrides?: RequestInit): Promise<{ status: 200; body: User; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.whoamiRequest(), initOverrides);
 
         const response = timedResponse.response;
@@ -1047,7 +1052,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1075,7 +1081,7 @@ export class DefaultApi {
         });
     }
 
-    async listAPIKeysResult(initOverrides?: RequestInit): Promise<{ status: 200; body: readonly ListedAPIKey[]; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async listAPIKeysResult(initOverrides?: RequestInit): Promise<{ status: 200; body: readonly ListedAPIKey[]; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.listAPIKeysRequest(), initOverrides);
 
         const response = timedResponse.response;
@@ -1085,7 +1091,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1119,7 +1126,7 @@ export class DefaultApi {
         });
     }
 
-    async createAPIKeyResult(requestParameters: CreateAPIKeyRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedAPIKey; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async createAPIKeyResult(requestParameters: CreateAPIKeyRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedAPIKey; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.createAPIKeyRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1129,7 +1136,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1157,7 +1165,7 @@ export class DefaultApi {
         });
     }
 
-    async appShellResult(initOverrides?: RequestInit): Promise<{ status: 200; body: AppShellData; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async appShellResult(initOverrides?: RequestInit): Promise<{ status: 200; body: AppShellData; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.appShellRequest(), initOverrides);
 
         const response = timedResponse.response;
@@ -1167,7 +1175,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1195,7 +1204,7 @@ export class DefaultApi {
         });
     }
 
-    async defaultTeamResult(initOverrides?: RequestInit): Promise<{ status: 200; body: Team; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async defaultTeamResult(initOverrides?: RequestInit): Promise<{ status: 200; body: Team; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.defaultTeamRequest(), initOverrides);
 
         const response = timedResponse.response;
@@ -1205,7 +1214,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1240,7 +1250,7 @@ export class DefaultApi {
         });
     }
 
-    async showPageResult(requestParameters: ShowPageRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: ShowPage; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async showPageResult(requestParameters: ShowPageRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: ShowPage; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.showPageRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1250,7 +1260,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1285,7 +1296,7 @@ export class DefaultApi {
         });
     }
 
-    async showsPageResult(requestParameters: ShowsPageRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: ShowsPage; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async showsPageResult(requestParameters: ShowsPageRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: ShowsPage; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.showsPageRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1295,7 +1306,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1332,7 +1344,7 @@ export class DefaultApi {
         });
     }
 
-    async createTeamResult(requestParameters: CreateTeamRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Team; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async createTeamResult(requestParameters: CreateTeamRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Team; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.createTeamRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1342,7 +1354,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1380,7 +1393,7 @@ export class DefaultApi {
         });
     }
 
-    async createImageUploadPresignResult(requestParameters: CreateImageUploadPresignRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedImageUploadPresign; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async createImageUploadPresignResult(requestParameters: CreateImageUploadPresignRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedImageUploadPresign; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.createImageUploadPresignRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1390,7 +1403,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1431,7 +1445,7 @@ export class DefaultApi {
         });
     }
 
-    async createMediaMultipartUploadResult(requestParameters: CreateMediaMultipartUploadRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedMediaMultipartUpload; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async createMediaMultipartUploadResult(requestParameters: CreateMediaMultipartUploadRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedMediaMultipartUpload; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.createMediaMultipartUploadRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1441,7 +1455,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1482,7 +1497,7 @@ export class DefaultApi {
         });
     }
 
-    async createMediaUploadPresignResult(requestParameters: CreateMediaUploadPresignRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedMediaUploadPresign; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async createMediaUploadPresignResult(requestParameters: CreateMediaUploadPresignRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: CreatedMediaUploadPresign; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.createMediaUploadPresignRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1492,7 +1507,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1537,7 +1553,7 @@ export class DefaultApi {
         });
     }
 
-    async completeMediaMultipartUploadResult(requestParameters: CompleteMediaMultipartUploadRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: CompletedMediaMultipartUpload; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async completeMediaMultipartUploadResult(requestParameters: CompleteMediaMultipartUploadRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: CompletedMediaMultipartUpload; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.completeMediaMultipartUploadRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1547,7 +1563,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1592,7 +1609,7 @@ export class DefaultApi {
         });
     }
 
-    async presignMediaUploadPartsResult(requestParameters: PresignMediaUploadPartsRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: PresignedMediaUploadParts; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
+    async presignMediaUploadPartsResult(requestParameters: PresignMediaUploadPartsRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: PresignedMediaUploadParts; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.presignMediaUploadPartsRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1602,7 +1619,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1637,7 +1655,7 @@ export class DefaultApi {
         });
     }
 
-    async listShowsResult(requestParameters: ListShowsRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: readonly Show[]; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async listShowsResult(requestParameters: ListShowsRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: readonly Show[]; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.listShowsRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1647,7 +1665,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1685,7 +1704,7 @@ export class DefaultApi {
         });
     }
 
-    async createShowResult(requestParameters: CreateShowRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Show; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 403; raw: Response } | { status: 409; raw: Response }> {
+    async createShowResult(requestParameters: CreateShowRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Show; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 403; raw: Response } | { status: 409; raw: Response }> {
         const timedResponse = await this.request(this.createShowRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1695,7 +1714,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1743,7 +1763,7 @@ export class DefaultApi {
         });
     }
 
-    async updateShowResult(requestParameters: UpdateShowRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: Show; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async updateShowResult(requestParameters: UpdateShowRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: Show; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.updateShowRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1753,7 +1773,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1789,7 +1810,7 @@ export class DefaultApi {
         });
     }
 
-    async listEpisodesResult(requestParameters: ListEpisodesRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: readonly Episode[]; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async listEpisodesResult(requestParameters: ListEpisodesRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: readonly Episode[]; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.listEpisodesRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1799,7 +1820,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1841,7 +1863,7 @@ export class DefaultApi {
         });
     }
 
-    async createEpisodeResult(requestParameters: CreateEpisodeRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Episode; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async createEpisodeResult(requestParameters: CreateEpisodeRequest, initOverrides?: RequestInit): Promise<{ status: 201; body: Episode; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.createEpisodeRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1851,7 +1873,8 @@ export class DefaultApi {
             return { status: 201, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1897,7 +1920,7 @@ export class DefaultApi {
         });
     }
 
-    async updateEpisodeResult(requestParameters: UpdateEpisodeRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: Episode; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response }> {
+    async updateEpisodeResult(requestParameters: UpdateEpisodeRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: Episode; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response }> {
         const timedResponse = await this.request(this.updateEpisodeRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -1907,7 +1930,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -1948,7 +1972,7 @@ export class DefaultApi {
         });
     }
 
-    async episodeProcessingEventsResult(requestParameters: EpisodeProcessingEventsRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: AsyncIterable<EpisodeProcessingCompleteEvent>; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 401; raw: Response } | { status: 403; raw: Response } | { status: 404; raw: Response }> {
+    async episodeProcessingEventsResult(requestParameters: EpisodeProcessingEventsRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: AsyncIterable<EpisodeProcessingCompleteEvent>; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 401; raw: Response } | { status: 403; raw: Response } | { status: 404; raw: Response }> {
         const sseResponse = await this.sseRequest(this.episodeProcessingEventsRequest(requestParameters), initOverrides);
         const timedResponse = sseResponse.attempt;
         let keepSSE = false;
@@ -1978,7 +2002,8 @@ export class DefaultApi {
             return { status: 200, body: parseEventStream<EpisodeProcessingCompleteEvent>(raw, undefined), raw };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 401) {
             return { status: 401, raw: response };
@@ -2016,7 +2041,7 @@ export class DefaultApi {
         });
     }
 
-    async listTestEmailsResult(initOverrides?: RequestInit): Promise<{ status: 200; body: readonly TestEmail[]; raw: Response } | { status: 400; body: ValidationErr; raw: Response } | { status: 404; raw: Response }> {
+    async listTestEmailsResult(initOverrides?: RequestInit): Promise<{ status: 200; body: readonly TestEmail[]; raw: Response } | { status: 400; body: Blob; raw: Response } | { status: 404; raw: Response }> {
         const timedResponse = await this.request(this.listTestEmailsRequest(), initOverrides);
 
         const response = timedResponse.response;
@@ -2026,7 +2051,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         if (response.status === 404) {
             return { status: 404, raw: response };
@@ -2058,7 +2084,7 @@ export class DefaultApi {
         });
     }
 
-    async renderShowRSSFeedResult(requestParameters: RenderShowRSSFeedRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: string; raw: Response } | { status: 400; body: ValidationErr; raw: Response }> {
+    async renderShowRSSFeedResult(requestParameters: RenderShowRSSFeedRequest, initOverrides?: RequestInit): Promise<{ status: 200; body: string; raw: Response } | { status: 400; body: Blob; raw: Response }> {
         const timedResponse = await this.request(this.renderShowRSSFeedRequest(requestParameters), initOverrides);
 
         const response = timedResponse.response;
@@ -2068,7 +2094,8 @@ export class DefaultApi {
             return { status: 200, body, raw: response };
         }
         if (response.status === 400) {
-            return { status: 400, raw: response };
+            const body: Blob = await response.blob();
+            return { status: 400, body, raw: response };
         }
         throw new ResponseError(response, `Unexpected response status ${response.status}`);
         } finally {
