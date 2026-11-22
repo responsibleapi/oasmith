@@ -842,9 +842,10 @@ func (c *Client) {{.ID}}(ctx context.Context{{if .HasParams}}, params {{.ParamsT
 		if len(rawBody) > maxDecodedBodyBytes {
 			return nil, fmt.Errorf("read {{$operation.ID}} status {{.Status}} response: body exceeds %d bytes", maxDecodedBodyBytes)
 		}
-		decoded := {{.Type}}(rawBody)
+{{if .Binary}}		result.{{.FieldName}} = &rawBody
+{{else}}		decoded := {{.Type}}(rawBody)
 		result.{{.FieldName}} = &decoded
-		return result, nil
+{{end}}		return result, nil
 {{end}}{{end}}{{end}}{{if .BodylessStatuses}}	case {{.BodylessStatuses}}:
 		_ = res.Body.Close()
 		return result, nil

@@ -303,6 +303,7 @@ type opResponse struct {
 	SSE    bool
 	JSON   bool
 	Text   bool
+	Binary bool
 }
 
 func modelImports(doc *openapi.Document, operations []clientgen.Operation) []string {
@@ -444,7 +445,7 @@ func multipartBodyTemplateData(analyzed *clientgen.MultipartBody) *tsMultipartBo
 
 func multipartPartType(part clientgen.MultipartPart) string {
 	if part.Binary {
-		return "Blob"
+		return binaryType
 	}
 	return tsType(part.Schema)
 }
@@ -452,13 +453,18 @@ func multipartPartType(part clientgen.MultipartPart) string {
 func operationResponses(analyzed []clientgen.Response) []opResponse {
 	responses := make([]opResponse, 0, len(analyzed))
 	for _, response := range analyzed {
+		responseType := tsType(response.Schema)
+		if response.Binary() {
+			responseType = binaryType
+		}
 		responses = append(responses, opResponse{
 			Status: response.Status,
-			Type:   tsType(response.Schema),
+			Type:   responseType,
 			Body:   response.HasBody(),
 			SSE:    response.SSE,
 			JSON:   response.JSON(),
 			Text:   response.Text(),
+			Binary: response.Binary(),
 		})
 	}
 	return responses
@@ -536,6 +542,7 @@ const (
 	nullType     = "null"
 	jsonBodyName = "body"
 	rawBodyParam = "rawBody"
+	binaryType   = "Blob"
 )
 
 func tsType(schema *openapi.Schema) string {

@@ -90,6 +90,11 @@ Binary multipart parts are `Blob` values; their media types must match the
 content types declared by the corresponding prefix encoding. Unsupported
 request-body shapes fail generation.
 
+Response bodies with a schema under a media type that is neither JSON, text,
+XML nor an event stream are raw bytes, such as `type: string` with
+`contentMediaType: application/octet-stream`. Clients return them unparsed:
+`Blob` in TypeScript, `[]byte` in Go, `Vec<u8>` in Rust and `List<int>` in Dart.
+
 ## OpenTelemetry trace propagation
 
 Generated clients leave OpenTelemetry dependencies and SDK setup to the

@@ -155,6 +155,22 @@ func TestGoldenFixtures(t *testing.T) {
 				return tsemit.Emit(doc, tsemit.Options{OutDir: outDir})
 			},
 		},
+		{
+			name:    "binary-response-go",
+			fixture: "binary-response.yaml",
+			golden:  "binary-response-go",
+			emit: func(doc *openapi.Document, outDir string, sourcePath string) error {
+				return goemit.EmitClient(doc, goemit.Options{OutDir: outDir, SourcePath: sourcePath})
+			},
+		},
+		{
+			name:    "binary-response-typescript",
+			fixture: "binary-response.yaml",
+			golden:  "binary-response-typescript",
+			emit: func(doc *openapi.Document, outDir string, _ string) error {
+				return tsemit.Emit(doc, tsemit.Options{OutDir: outDir})
+			},
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()

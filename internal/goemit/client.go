@@ -76,6 +76,7 @@ type goResponseData struct {
 	Body             bool
 	JSON             bool
 	Text             bool
+	Binary           bool
 	SSE              bool
 	ReconnectableSSE bool
 }
@@ -197,13 +198,18 @@ func (e *emitter) operationResponses(analyzed []clientgen.Response) ([]goRespons
 	responses := make([]goResponseData, 0, len(analyzed))
 	var bodylessStatuses []string
 	for _, response := range analyzed {
+		responseType := binaryType
+		if !response.Binary() {
+			responseType = e.goType(response.Schema)
+		}
 		responseData := goResponseData{
 			Status:           response.Status,
 			FieldName:        fmt.Sprintf("Status%d", response.Status),
-			Type:             e.goType(response.Schema),
+			Type:             responseType,
 			Body:             response.HasBody(),
 			JSON:             response.JSON(),
 			Text:             response.Text(),
+			Binary:           response.Binary(),
 			SSE:              response.SSE,
 			ReconnectableSSE: response.SSE,
 		}

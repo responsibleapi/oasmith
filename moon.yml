@@ -19,6 +19,8 @@ tasks:
       go run ./cmd/oasmith --openapi testdata/fixtures/public-client.yaml --mode client --lang go --out testdata/golden/public-client-go
       go run ./cmd/oasmith --openapi testdata/fixtures/private.yaml --mode client --lang typescript --out testdata/golden/private-typescript
       go run ./cmd/oasmith --openapi testdata/fixtures/config.yaml --mode client --lang typescript --out testdata/golden/config-typescript
+      go run ./cmd/oasmith --openapi testdata/fixtures/binary-response.yaml --mode client --lang go --out testdata/golden/binary-response-go
+      go run ./cmd/oasmith --openapi testdata/fixtures/binary-response.yaml --mode client --lang typescript --out testdata/golden/binary-response-typescript
     options:
       cache: false
       runInCI: false
