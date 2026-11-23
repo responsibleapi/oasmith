@@ -24,11 +24,20 @@ request bodies, responses, and server-sent event operations.
 
 ## Install
 
-OASmith requires Go 1.26 or newer.
+With [mise](https://mise.jdx.dev), install a prebuilt binary from GitHub
+Releases (macOS, Linux and Windows on amd64 and arm64):
 
 ```sh
-go get -tool github.com/responsibleapi/oasmith/cmd/oasmith@latest
+mise use github:responsibleapi/oasmith@0.1.0
 ```
+
+Or pin it as a Go tool in your module (requires Go 1.27 or newer):
+
+```sh
+go get -tool github.com/responsibleapi/oasmith/cmd/oasmith@v0.1.0
+```
+
+`oasmith --version` prints the installed version.
 
 ## Usage
 
@@ -285,6 +294,10 @@ Development tools are pinned in this repository's `mise.toml`. Run
 `mise install --locked`, then `moon run oasmith:check`. The generator and its
 default verification run in Go; neither Dart nor Rust is a tool requirement.
 Generating those languages does not invoke their compilers.
+
+Releases are published by pushing a `vX.Y.Z` tag. The release workflow tests,
+cross-compiles static binaries named `oasmith-<os>-<arch>`, attests their
+provenance and attaches them with `checksums.txt` to a GitHub release.
 
 Go linting uses `go tool golangci-lint` and the same policy as the parent
 workspace. Moon derives exclusions from this checkout's Git ignore rules.
